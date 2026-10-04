@@ -1,0 +1,7 @@
+.claude/scratch/
+ajent.social
+ajent.social.*
+.DS_Store
+.build/
+DerivedData/
+*.xcarchive
