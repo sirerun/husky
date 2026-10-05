@@ -84,21 +84,56 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
       XCTAssertEqual(first.messages.count, 3)
       XCTAssertTrue(first.hasMore_p)
       XCTAssertGreaterThan(first.snapshotSequence, 0)
-      XCTAssertEqual(first.messages.map(\.sequence), first.messages.map(\.sequence).sorted())
 
-      let second = try await backend.getHistory(
-        .with {
-          $0.conversationID = conversation
-          $0.pageSize = 3
-          $0.beforeCursor = first.nextCursor
-        })
-      XCTAssertEqual(second.messages.count, 3)
-      XCTAssertEqual(second.snapshotSequence, first.snapshotSequence)
-      XCTAssertFalse(second.hasMore_p)
-      XCTAssertEqual(second.messages.map(\.sequence), second.messages.map(\.sequence).sorted())
-      XCTAssertTrue(
-        Set(first.messages.map(\.messageID)).isDisjoint(with: Set(second.messages.map(\.messageID)))
-      )
+      var pages = [first.messages]
+      var current = first
+      var consumedCursors = Set<String>()
+      while current.hasMore_p, pages.count < 10 {
+        let cursor = current.nextCursor
+        guard !cursor.isEmpty else {
+          XCTFail("has_more requires a next cursor")
+          break
+        }
+        guard consumedCursors.insert(cursor).inserted else {
+          XCTFail("history pagination must advance to a new cursor")
+          break
+        }
+
+        current = try await backend.getHistory(
+          .with {
+            $0.conversationID = conversation
+            $0.pageSize = 3
+            $0.beforeCursor = cursor
+          })
+        XCTAssertEqual(current.snapshotSequence, first.snapshotSequence)
+        XCTAssertLessThanOrEqual(current.messages.count, 3)
+        pages.append(current.messages)
+      }
+
+      XCTAssertFalse(current.hasMore_p, "history pagination must terminate")
+      XCTAssertTrue(current.nextCursor.isEmpty)
+      XCTAssertEqual(pages.map(\.count), [3, 3, 3, 1])
+
+      for page in pages {
+        XCTAssertFalse(page.isEmpty)
+        XCTAssertEqual(page.map(\.sequence), page.map(\.sequence).sorted())
+      }
+      for index in 0..<(pages.count - 1) {
+        guard let newerPageFirst = pages[index].first, let olderPageLast = pages[index + 1].last
+        else {
+          XCTFail("each history page must contain messages")
+          continue
+        }
+        XCTAssertGreaterThan(newerPageFirst.sequence, olderPageLast.sequence)
+      }
+
+      let newestToOldest = pages.flatMap { $0 }
+      XCTAssertEqual(newestToOldest.count, 10)
+      XCTAssertEqual(Set(newestToOldest.map(\.messageID)).count, 10)
+      XCTAssertEqual(newestToOldest.filter { $0.role == .user }.count, 5)
+      XCTAssertEqual(newestToOldest.filter { $0.role == .assistant }.count, 5)
+      let oldestToNewest = pages.reversed().flatMap { $0 }
+      XCTAssertEqual(oldestToNewest.map(\.sequence), oldestToNewest.map(\.sequence).sorted())
     }
   }
 
