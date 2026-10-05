@@ -273,8 +273,8 @@ private struct HuskyMessageBubble: View {
         .font(.system(size: fontSize))
         .foregroundStyle(.primary)
         .textSelection(.enabled)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, HuskyPanelLayout.messageHorizontalPadding)
+        .padding(.vertical, HuskyPanelLayout.messageVerticalPadding)
         .frame(maxWidth: HuskyPanelLayout.messageMaximumWidth, alignment: .leading)
         .background {
           HuskyMaterialSurface(
