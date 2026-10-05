@@ -1,6 +1,7 @@
-import XCTest
-@testable import HuskyCore
 import HuskyProtocol
+import XCTest
+
+@testable import HuskyCore
 
 final class HuskyLimitTests: XCTestCase {
   func testCapabilitiesRejectLimitsAboveFrozenCeilingsAndInvalidDefaults() throws {
@@ -15,6 +16,11 @@ final class HuskyLimitTests: XCTestCase {
     XCTAssertThrowsError(try HuskyGRPCMapper.mapCapabilities(capabilities))
 
     capabilities = validCapabilities()
+    capabilities.defaultHistoryPageSize = 51
+    XCTAssertThrowsError(try HuskyGRPCMapper.mapCapabilities(capabilities))
+
+    capabilities = validCapabilities()
+    capabilities.maximumHistoryPageSize = 100
     capabilities.defaultHistoryPageSize = 51
     XCTAssertThrowsError(try HuskyGRPCMapper.mapCapabilities(capabilities))
   }
@@ -43,16 +49,19 @@ final class HuskyLimitTests: XCTestCase {
       requestID: "r-1", messageID: "m-1", revision: 1, append: "é", replace: nil
     )
     XCTAssertThrowsError(
-      try HuskyMessageBodyValidator.apply(tooLarge, maximumBytes: 3, partialMessages: &partialMessages)
+      try HuskyMessageBodyValidator.apply(
+        tooLarge, maximumBytes: 3, partialMessages: &partialMessages)
     )
 
     let replacement = HuskyChatEvent.textDelta(
       requestID: "r-1", messageID: "m-1", revision: 2, append: "ignored", replace: "é"
     )
-    try HuskyMessageBodyValidator.apply(replacement, maximumBytes: 3, partialMessages: &partialMessages)
+    try HuskyMessageBodyValidator.apply(
+      replacement, maximumBytes: 3, partialMessages: &partialMessages)
     XCTAssertEqual(partialMessages["m-1"]?.text, "é")
     XCTAssertThrowsError(
-      try HuskyMessageBodyValidator.apply(replacement, maximumBytes: 3, partialMessages: &partialMessages)
+      try HuskyMessageBodyValidator.apply(
+        replacement, maximumBytes: 3, partialMessages: &partialMessages)
     )
   }
 
@@ -68,7 +77,8 @@ final class HuskyLimitTests: XCTestCase {
       )
     )
     XCTAssertThrowsError(
-      try HuskyMessageBodyValidator.apply(completed, maximumBytes: 3, partialMessages: &partialMessages)
+      try HuskyMessageBodyValidator.apply(
+        completed, maximumBytes: 3, partialMessages: &partialMessages)
     )
   }
 
@@ -112,6 +122,69 @@ final class HuskyLimitTests: XCTestCase {
     consumer.cancel()
     await fulfillment(of: [handlerFinished], timeout: 1)
     await consumer.value
+  }
+
+  func testCommandStreamIsBoundedAndTerminatesAfterOverflow() async throws {
+    let commands = HuskyCommandStream(capacity: 1)
+    var command = HuskyClientCommand()
+    command.command = .endSession(HuskyEndSession())
+
+    XCTAssertEqual(commands.yield(command), .enqueued)
+    XCTAssertEqual(commands.yield(command), .overflow)
+    var iterator = commands.stream.makeAsyncIterator()
+    let buffered = try await iterator.next()
+    XCTAssertEqual(buffered, command)
+    let finished = try await iterator.next()
+    XCTAssertNil(finished)
+  }
+
+  func testLiveMessageMustMatchSessionConversation() {
+    let event = HuskyChatEvent.messageStarted(
+      requestID: "r-1",
+      message: HuskyMessage(
+        id: "m-1", conversationID: "other-conversation", role: .assistant, text: "hello",
+        createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 1
+      )
+    )
+    var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
+    XCTAssertThrowsError(
+      try HuskyMessageBodyValidator.apply(
+        event,
+        maximumBytes: 4096,
+        expectedConversationID: "selected-conversation",
+        partialMessages: &partialMessages
+      )
+    ) { error in
+      XCTAssertEqual(
+        error as? HuskyClientError,
+        .unexpectedConversation(expected: "selected-conversation", actual: "other-conversation")
+      )
+    }
+  }
+
+  func testRequestCancellationAndFailureClearPartialMessages() throws {
+    for terminalEvent in [
+      HuskyChatEvent.requestCancelled(requestID: "r-1"),
+      HuskyChatEvent.requestFailed(
+        requestID: "r-1", publicCode: "FAILED_PRECONDITION", message: "stopped", retryable: false
+      ),
+    ] {
+      var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
+      let started = HuskyChatEvent.messageStarted(
+        requestID: "r-1",
+        message: HuskyMessage(
+          id: "m-1", conversationID: "c-1", role: .assistant, text: "partial",
+          createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 1
+        )
+      )
+      try HuskyMessageBodyValidator.apply(
+        started, maximumBytes: 4096, partialMessages: &partialMessages)
+      XCTAssertNotNil(partialMessages["m-1"])
+
+      try HuskyMessageBodyValidator.apply(
+        terminalEvent, maximumBytes: 4096, partialMessages: &partialMessages)
+      XCTAssertNil(partialMessages["m-1"])
+    }
   }
 
   private func validCapabilities() -> HuskyGetCapabilitiesResponse {

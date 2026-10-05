@@ -4,6 +4,7 @@ enum HuskyMessageBodyValidator {
   struct PartialMessage: Sendable {
     var revision: UInt64
     var text: String
+    var requestID: String?
   }
 
   static func validate(_ text: String, maximumBytes: UInt32) throws {
@@ -16,24 +17,33 @@ enum HuskyMessageBodyValidator {
   static func apply(
     _ event: HuskyChatEvent,
     maximumBytes: UInt32,
+    expectedConversationID: String? = nil,
     partialMessages: inout [String: PartialMessage]
   ) throws {
     switch event {
-    case let .messageAccepted(_, message, _), let .messageCompleted(_, message):
+    case .messageAccepted(_, let message, _), .messageCompleted(_, let message):
+      try validateConversation(message, expected: expectedConversationID)
       try validate(message.text, maximumBytes: maximumBytes)
       partialMessages.removeValue(forKey: message.id)
 
-    case let .messageStarted(_, message):
+    case .messageStarted(let requestID, let message):
+      try validateConversation(message, expected: expectedConversationID)
       try validate(message.text, maximumBytes: maximumBytes)
-      partialMessages[message.id] = PartialMessage(revision: 0, text: message.text)
+      partialMessages[message.id] = PartialMessage(
+        revision: 0,
+        text: message.text,
+        requestID: requestID
+      )
 
-    case let .textDelta(_, messageID, revision, append, replace):
+    case .textDelta(_, let messageID, let revision, let append, let replace):
       if let replace {
         try validate(replace, maximumBytes: maximumBytes)
       } else {
         try validate(append, maximumBytes: maximumBytes)
       }
-      var partial = partialMessages[messageID] ?? PartialMessage(revision: 0, text: "")
+      var partial =
+        partialMessages[messageID]
+        ?? PartialMessage(revision: 0, text: "", requestID: nil)
       guard revision > partial.revision else {
         throw HuskyClientError.malformedResponse("text delta revisions must increase")
       }
@@ -42,8 +52,19 @@ enum HuskyMessageBodyValidator {
       partial.revision = revision
       partialMessages[messageID] = partial
 
-    case .sessionReady, .statusChanged, .requestCancelled, .requestFailed, .resyncRequired:
+    case .requestCancelled(let requestID), .requestFailed(let requestID, _, _, _):
+      for (messageID, partial) in Array(partialMessages) where partial.requestID == requestID {
+        partialMessages.removeValue(forKey: messageID)
+      }
+
+    case .sessionReady, .statusChanged, .resyncRequired:
       break
     }
+  }
+
+  private static func validateConversation(_ message: HuskyMessage, expected: String?) throws {
+    guard let expected, message.conversationID != expected else { return }
+    throw HuskyClientError.unexpectedConversation(
+      expected: expected, actual: message.conversationID)
   }
 }
