@@ -9,7 +9,7 @@ final class HuskyChatPanelModel {
     private(set) var statusText: String?
 
     private let client: any HuskyChatPanelClient
-    private var updatesTask: Task<Void, Never>?
+    nonisolated(unsafe) private var updatesTask: Task<Void, Never>?
 
     init(client: any HuskyChatPanelClient) {
         self.client = client
