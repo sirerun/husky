@@ -43,8 +43,13 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
     false
   }
 
-  func applicationWillTerminate(_ notification: Notification) {
-    chatClient?.shutdown()
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    guard let chatClient else { return .terminateNow }
+    Task {
+      await chatClient.shutdown()
+      NSApp.reply(toApplicationShouldTerminate: true)
+    }
+    return .terminateLater
   }
 
   private func configureStatusItem() {
@@ -110,7 +115,7 @@ private final class HuskyUnconfiguredChatClient: HuskyChatPanelClient {
     }
   }
 
-  func shutdown() {}
+  func shutdown() async {}
 
   func submit(_ text: String) async throws {
     throw ClientError.noBackend
@@ -148,7 +153,7 @@ private final class HuskyDemoChatClient: HuskyChatPanelClient {
     }
   }
 
-  func shutdown() {}
+  func shutdown() async {}
 
   func submit(_ text: String) async throws {
     messages.append(HuskyPanelMessage(id: UUID().uuidString, role: .user, text: text))
