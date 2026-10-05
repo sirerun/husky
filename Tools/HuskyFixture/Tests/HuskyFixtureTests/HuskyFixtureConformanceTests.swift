@@ -29,6 +29,16 @@ final class HuskyFixtureConformanceTests: XCTestCase {
           $0.title = "Conversation 1"
         })
       XCTAssertEqual(duplicate.conversation.conversationID, created[0])
+      do {
+        _ = try await backend.createConversation(
+          .with {
+            $0.clientRequestID = "create-1"
+            $0.title = "Changed title"
+          })
+        XCTFail("reusing a create request ID with different content must fail")
+      } catch let error as RPCError {
+        XCTAssertEqual(error.code, .invalidArgument)
+      }
 
       let first = try await backend.listConversations(.with { $0.pageSize = 2 })
       XCTAssertEqual(first.conversations.map(\.conversationID), Array(created.suffix(2)))
@@ -60,7 +70,7 @@ final class HuskyFixtureConformanceTests: XCTestCase {
           try await writer.write(
             submit("history-\(index)", "message \(index)", conversationID: conversation))
         }
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitForAssistantMessages(5, conversationID: conversation, using: backend)
         try await writer.write(.with { $0.endSession = .init() })
       } onResponse: { response in
         for try await _ in response.messages {}
@@ -154,6 +164,45 @@ final class HuskyFixtureConformanceTests: XCTestCase {
           for try await _ in response.messages {}
         }
         XCTFail("the fixture must enforce the 64 KiB UTF-8 message limit")
+      } catch let error as RPCError {
+        XCTAssertEqual(error.code, .invalidArgument)
+      }
+    }
+  }
+
+  func testEmptyHistoryAndSessionConversationIDsReturnInvalidArgument() async throws {
+    try await withFixture { backend in
+      do {
+        _ = try await backend.getHistory(.with { $0.pageSize = 1 })
+        XCTFail("an empty conversation ID must be invalid")
+      } catch let error as RPCError {
+        XCTAssertEqual(error.code, .invalidArgument)
+      }
+
+      do {
+        try await backend.conversationSession { writer in
+          try await writer.write(start(conversationID: "", afterSequence: 0))
+        } onResponse: { response in
+          for try await _ in response.messages {}
+        }
+        XCTFail("an empty session conversation ID must be invalid")
+      } catch let error as RPCError {
+        XCTAssertEqual(error.code, .invalidArgument)
+      }
+    }
+  }
+
+  func testEmptyCancelRequestIDReturnsInvalidArgument() async throws {
+    try await withFixture { backend in
+      let conversation = try await createConversation("empty-cancel", using: backend)
+      do {
+        try await backend.conversationSession { writer in
+          try await writer.write(start(conversationID: conversation, afterSequence: 0))
+          try await writer.write(.with { $0.cancelRequest.requestID = "" })
+        } onResponse: { response in
+          for try await _ in response.messages {}
+        }
+        XCTFail("an empty cancel request ID must be invalid")
       } catch let error as RPCError {
         XCTAssertEqual(error.code, .invalidArgument)
       }
@@ -278,6 +327,25 @@ final class HuskyFixtureConformanceTests: XCTestCase {
         $0.title = "Fixture test"
       })
     return response.conversation.conversationID
+  }
+
+  private func waitForAssistantMessages(
+    _ expectedCount: Int,
+    conversationID: String,
+    using backend: Husky_V1_HuskyBackend.Client<InProcessTransport.Client>
+  ) async throws {
+    for _ in 0..<500 {
+      let history = try await backend.getHistory(
+        .with {
+          $0.conversationID = conversationID
+          $0.pageSize = 100
+        })
+      let assistantCount = history.messages.filter { $0.role == .assistant }.count
+      if assistantCount == expectedCount { return }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    throw RPCError(
+      code: .deadlineExceeded, message: "Fixture completion did not arrive within the test guard.")
   }
 
   private func start(conversationID: String, afterSequence: UInt64) -> HuskyClientCommand {
