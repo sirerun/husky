@@ -62,6 +62,8 @@ public struct HuskyEventCursor: Sendable, Equatable {
   public let conversationID: String
   public private(set) var lastAppliedSequence: UInt64
   public private(set) var resumeToken: String?
+  private var pendingEvent: HuskySequencedEvent?
+  private var pendingResumeToken: String?
 
   public init(conversationID: String, afterSequence: UInt64, resumeToken: String? = nil) {
     self.conversationID = conversationID
@@ -69,7 +71,14 @@ public struct HuskyEventCursor: Sendable, Equatable {
     self.resumeToken = resumeToken
   }
 
-  public mutating func apply(_ sequencedEvent: HuskySequencedEvent) throws -> HuskyEventDisposition {
+  /// Validates an event without advancing the reconnect cursor. The consumer
+  /// must call `acknowledge(_:)` only after it has applied the event to state.
+  public mutating func stage(_ sequencedEvent: HuskySequencedEvent) throws -> HuskyEventDisposition {
+    guard self.pendingEvent == nil else {
+      throw HuskyClientError.eventApplicationPending(
+        sequence: self.pendingEvent?.sequence ?? self.lastAppliedSequence
+      )
+    }
     switch sequencedEvent.event {
     case let .sessionReady(conversationID, caughtUpThrough, token):
       guard conversationID == self.conversationID else {
@@ -81,7 +90,8 @@ public struct HuskyEventCursor: Sendable, Equatable {
       guard caughtUpThrough == self.lastAppliedSequence else {
         return .resynchronize
       }
-      self.resumeToken = token
+      self.pendingEvent = sequencedEvent
+      self.pendingResumeToken = token
       return .deliver
 
     case let .resyncRequired(conversationID, _, _):
@@ -95,16 +105,35 @@ public struct HuskyEventCursor: Sendable, Equatable {
     }
 
     let sequence = sequencedEvent.sequence
-    guard sequence > 0 else { return .deliver }
+    guard sequence > 0 else {
+      self.pendingEvent = sequencedEvent
+      return .deliver
+    }
     guard sequence > self.lastAppliedSequence else { return .ignoreDuplicate }
     let (expected, overflow) = self.lastAppliedSequence.addingReportingOverflow(1)
     guard !overflow, sequence == expected else { return .resynchronize }
-    self.lastAppliedSequence = sequence
+    self.pendingEvent = sequencedEvent
     return .deliver
+  }
+
+  public mutating func acknowledge(_ sequencedEvent: HuskySequencedEvent) throws {
+    guard self.pendingEvent == sequencedEvent else {
+      throw HuskyClientError.eventNotPending
+    }
+    if sequencedEvent.sequence > 0 {
+      self.lastAppliedSequence = sequencedEvent.sequence
+    }
+    if case .sessionReady = sequencedEvent.event {
+      self.resumeToken = self.pendingResumeToken
+    }
+    self.pendingEvent = nil
+    self.pendingResumeToken = nil
   }
 
   public mutating func reset(after snapshotSequence: UInt64, resumeToken: String? = nil) {
     self.lastAppliedSequence = snapshotSequence
     self.resumeToken = resumeToken
+    self.pendingEvent = nil
+    self.pendingResumeToken = nil
   }
 }

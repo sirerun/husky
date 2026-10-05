@@ -138,7 +138,11 @@ public enum HuskyClientError: Error, Sendable, Equatable {
   case incompatibleClientVersion(minimum: UInt32, maximum: UInt32, client: UInt32)
   case unexpectedConversation(expected: String, actual: String)
   case invalidEventSequence(expected: UInt64, actual: UInt64)
+  case eventApplicationPending(sequence: UInt64)
+  case eventNotPending
   case historyNotOrdered
   case malformedResponse(String)
+  case invalidCapabilities(String)
+  case eventBufferOverflow
   case resynchronizationRequired
 }
