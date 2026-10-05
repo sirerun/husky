@@ -44,7 +44,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "Husky",
-            dependencies: ["HuskyCore"],
+            dependencies: [
+                "HuskyCore",
+                "HuskyProtocol",
+                .product(name: "GRPCCore", package: "grpc-swift-2"),
+                .product(name: "GRPCNIOTransportHTTP2", package: "grpc-swift-nio-transport"),
+            ],
             path: "App/Husky",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

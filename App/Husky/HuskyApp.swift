@@ -15,19 +15,36 @@ struct HuskyApp: App {
 @MainActor
 private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
   private var panelController: HuskyFloatingPanelController?
+  private var chatClient: (any HuskyChatPanelClient)?
   private var statusItem: NSStatusItem?
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     let demo = ProcessInfo.processInfo.arguments.contains("--demo")
-    let client: any HuskyChatPanelClient =
-      demo ? HuskyDemoChatClient() : HuskyUnconfiguredChatClient()
-    panelController = HuskyFloatingPanelController(client: client, isDemo: demo)
+    let fixtureMode = ProcessInfo.processInfo.arguments.contains("--fixture-mode")
+    let client: any HuskyChatPanelClient
+    if fixtureMode {
+      client = HuskyGRPCFixtureChatClient(
+        port: Self.fixturePort(from: ProcessInfo.processInfo.arguments))
+    } else if demo {
+      client = HuskyDemoChatClient()
+    } else {
+      client = HuskyUnconfiguredChatClient()
+    }
+    chatClient = client
+    panelController = HuskyFloatingPanelController(
+      client: client,
+      isDemo: demo || fixtureMode
+    )
     panelController?.show()
     configureStatusItem()
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     false
+  }
+
+  func applicationWillTerminate(_ notification: Notification) {
+    chatClient?.shutdown()
   }
 
   private func configureStatusItem() {
@@ -56,6 +73,17 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
   @objc private func quit() {
     NSApp.terminate(nil)
   }
+
+  private static func fixturePort(from arguments: [String]) -> Int {
+    guard let index = arguments.firstIndex(of: "--fixture-port"),
+      arguments.indices.contains(index + 1),
+      let port = Int(arguments[index + 1]),
+      (1...65_535).contains(port)
+    else {
+      return 50_051
+    }
+    return port
+  }
 }
 
 @MainActor
@@ -74,6 +102,15 @@ private final class HuskyUnconfiguredChatClient: HuskyChatPanelClient {
       continuation.finish()
     }
   }
+
+  func statusUpdates() -> AsyncStream<String?> {
+    AsyncStream { continuation in
+      continuation.yield(nil)
+      continuation.finish()
+    }
+  }
+
+  func shutdown() {}
 
   func submit(_ text: String) async throws {
     throw ClientError.noBackend
@@ -103,6 +140,15 @@ private final class HuskyDemoChatClient: HuskyChatPanelClient {
     continuation.yield(messages)
     return stream
   }
+
+  func statusUpdates() -> AsyncStream<String?> {
+    AsyncStream { continuation in
+      continuation.yield("Static local demo; no backend connection")
+      continuation.finish()
+    }
+  }
+
+  func shutdown() {}
 
   func submit(_ text: String) async throws {
     messages.append(HuskyPanelMessage(id: UUID().uuidString, role: .user, text: text))

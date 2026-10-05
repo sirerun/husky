@@ -17,5 +17,7 @@ struct HuskyPanelMessage: Identifiable, Sendable, Equatable {
 @MainActor
 protocol HuskyChatPanelClient: AnyObject {
   func messageUpdates() -> AsyncStream<[HuskyPanelMessage]>
+  func statusUpdates() -> AsyncStream<String?>
   func submit(_ text: String) async throws
+  func shutdown()
 }
