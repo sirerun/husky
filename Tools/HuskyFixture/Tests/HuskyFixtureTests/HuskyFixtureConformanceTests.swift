@@ -5,7 +5,7 @@ import HuskyFixture
 import HuskyProtocol
 import XCTest
 
-final class HuskyFixtureConformanceTests: XCTestCase {
+final class HuskyFixtureConformanceTests: XCTestCase,  Sendable {
   func testCapabilitiesAndCursorPaginationUseFrozenLimitsAndStablePages() async throws {
     try await withFixture { backend in
       let capabilities = try await backend.getCapabilities(.init())
@@ -42,7 +42,7 @@ final class HuskyFixtureConformanceTests: XCTestCase {
 
       let first = try await backend.listConversations(.with { $0.pageSize = 2 })
       XCTAssertEqual(first.conversations.map(\.conversationID), Array(created.suffix(2)))
-      XCTAssertTrue(first.hasMore)
+      XCTAssertTrue(first.hasMore_p)
       XCTAssertFalse(first.nextCursor.isEmpty)
       let second = try await backend.listConversations(
         .with {
@@ -50,7 +50,7 @@ final class HuskyFixtureConformanceTests: XCTestCase {
           $0.beforeCursor = first.nextCursor
         })
       XCTAssertEqual(second.conversations.map(\.conversationID), [created[0]])
-      XCTAssertFalse(second.hasMore)
+      XCTAssertFalse(second.hasMore_p)
 
       do {
         _ = try await backend.listConversations(.with { $0.pageSize = 101 })
@@ -82,7 +82,7 @@ final class HuskyFixtureConformanceTests: XCTestCase {
           $0.pageSize = 3
         })
       XCTAssertEqual(first.messages.count, 3)
-      XCTAssertTrue(first.hasMore)
+      XCTAssertTrue(first.hasMore_p)
       XCTAssertGreaterThan(first.snapshotSequence, 0)
       XCTAssertEqual(first.messages.map(\.sequence), first.messages.map(\.sequence).sorted())
 
@@ -94,7 +94,7 @@ final class HuskyFixtureConformanceTests: XCTestCase {
         })
       XCTAssertEqual(second.messages.count, 3)
       XCTAssertEqual(second.snapshotSequence, first.snapshotSequence)
-      XCTAssertFalse(second.hasMore)
+      XCTAssertFalse(second.hasMore_p)
       XCTAssertEqual(second.messages.map(\.sequence), second.messages.map(\.sequence).sorted())
       XCTAssertTrue(
         Set(first.messages.map(\.messageID)).isDisjoint(with: Set(second.messages.map(\.messageID)))
