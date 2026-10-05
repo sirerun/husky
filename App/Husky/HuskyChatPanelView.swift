@@ -35,6 +35,17 @@ struct HuskyChatPanelView: View {
 
   private var header: some View {
     HStack(spacing: 8) {
+      Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .frame(width: 28, height: 32)
+        .contentShape(Rectangle())
+        .gesture(WindowDragGesture())
+        .accessibilityElement()
+        .accessibilityLabel("Move chat window")
+        .accessibilityHint("Drag to reposition the chat window")
+        .help("Drag to move the chat window")
+
       Text("Husky")
         .font(.headline)
         .accessibilityAddTraits(.isHeader)
