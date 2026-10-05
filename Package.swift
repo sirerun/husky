@@ -26,10 +26,10 @@ let package = Package(
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ],
             path: "Packages/HuskyProtocol/Sources/HuskyProtocol",
+            swiftSettings: [.swiftLanguageMode(.v6)],
             plugins: [
                 .plugin(name: "GRPCProtobufGenerator", package: "grpc-swift-protobuf"),
-            ],
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            ]
         ),
         .target(
             name: "HuskyCore",
