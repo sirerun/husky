@@ -1,5 +1,15 @@
 import CoreGraphics
 
+enum HuskyPanelLayout {
+  static let sizeScale: CGFloat = 0.8
+  static let width: CGFloat = 560 * sizeScale
+  static let height: CGFloat = 660 * sizeScale
+  static let transcriptMinimumHeight: CGFloat = 220 * sizeScale
+  static let transcriptMaximumHeight: CGFloat = 510 * sizeScale
+  static let messageMaximumWidth: CGFloat = 560 * 0.87 * sizeScale
+  static let messageCornerRadius: CGFloat = 26 * sizeScale
+}
+
 struct HuskyPanelScreenArea {
   let frame: CGRect
   let visibleFrame: CGRect
@@ -14,7 +24,7 @@ enum HuskyPanelGeometry {
 
   static func initialFrame(
     in visibleFrame: CGRect,
-    desiredSize: CGSize = CGSize(width: 560, height: 680),
+    desiredSize: CGSize = CGSize(width: HuskyPanelLayout.width, height: HuskyPanelLayout.height),
     inset: CGFloat = 24
   ) -> CGRect {
     let size = fit(desiredSize, in: visibleFrame, inset: inset)
@@ -23,6 +33,18 @@ enum HuskyPanelGeometry {
       y: visibleFrame.minY + inset,
       width: size.width,
       height: size.height
+    )
+  }
+
+  static func resizeLegacyDefaultFrame(_ savedFrame: CGRect) -> CGRect {
+    guard savedFrame.width == 560, savedFrame.height == 660 || savedFrame.height == 680 else {
+      return savedFrame
+    }
+    return CGRect(
+      origin: savedFrame.origin,
+      size: CGSize(
+        width: savedFrame.width * HuskyPanelLayout.sizeScale,
+        height: savedFrame.height * HuskyPanelLayout.sizeScale)
     )
   }
 
