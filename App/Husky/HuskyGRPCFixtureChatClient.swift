@@ -23,6 +23,7 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
   private var statusContinuation: AsyncStream<String?>.Continuation?
   private var connectionTask: Task<Void, Never>?
   private var session: (any HuskyConversationSession)?
+  private var conversationID: String?
 
   init(port: Int) {
     self.port = port
@@ -71,67 +72,89 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
   }
 
   private func runConnection() async {
-    do {
-      let transport = try HTTP2ClientTransport.Posix.http2NIOPosix(
-        target: .ipv4(host: "127.0.0.1", port: self.port),
-        transportSecurity: .plaintext
-      )
-      try await withGRPCClient(transport: transport) { grpcClient in
-        let backend = HuskyHuskyBackend.Client(wrapping: grpcClient)
-        let api = GRPCHuskyChatClient(backend: backend)
-        let capabilities = try await api.getCapabilities()
-        let page = try await api.listConversations(
-          pageSize: capabilities.defaultHistoryPageSize,
-          before: nil
+    while !Task.isCancelled {
+      do {
+        let transport = try HTTP2ClientTransport.Posix.http2NIOPosix(
+          target: .ipv4(host: "127.0.0.1", port: self.port),
+          transportSecurity: .plaintext
         )
-        let conversation: HuskyConversation
-        if let existing = page.conversations.first {
-          conversation = existing
-        } else {
-          conversation = try await api.createConversation(
-            requestID: UUID().uuidString,
-            title: "Local fixture conversation"
+        try await withGRPCClient(transport: transport) { grpcClient in
+          let backend = HuskyHuskyBackend.Client(wrapping: grpcClient)
+          let api = GRPCHuskyChatClient(backend: backend)
+          let capabilities = try await api.getCapabilities()
+          let page = try await api.listConversations(
+            pageSize: capabilities.defaultHistoryPageSize,
+            before: nil
           )
-        }
-        let history = try await api.getHistory(
-          conversationID: conversation.id,
-          pageSize: capabilities.defaultHistoryPageSize,
-          before: nil
-        )
-        self.messages = history.messages.map(Self.panelMessage)
-        self.publishMessages()
-        let session = try await api.openConversation(
-          conversationID: conversation.id,
-          afterSequence: history.snapshotSequence,
-          resumeToken: nil
-        )
-        self.session = session
-        var cursor = HuskyEventCursor(
-          conversationID: conversation.id,
-          afterSequence: history.snapshotSequence
-        )
-        self.publishStatus("Connected to deterministic local gRPC fixture")
+          let conversation: HuskyConversation
+          if let conversationID = self.conversationID,
+            let existing = page.conversations.first(where: { $0.id == conversationID })
+          {
+            conversation = existing
+          } else if let existing = page.conversations.first {
+            conversation = existing
+          } else {
+            conversation = try await api.createConversation(
+              requestID: UUID().uuidString,
+              title: "Local fixture conversation"
+            )
+          }
+          self.conversationID = conversation.id
+          let history = try await api.getHistory(
+            conversationID: conversation.id,
+            pageSize: capabilities.defaultHistoryPageSize,
+            before: nil
+          )
+          self.messages = history.messages.map(Self.panelMessage)
+          self.publishMessages()
+          let session = try await api.openConversation(
+            conversationID: conversation.id,
+            afterSequence: history.snapshotSequence,
+            resumeToken: nil
+          )
+          self.session = session
+          var cursor = HuskyEventCursor(
+            conversationID: conversation.id,
+            afterSequence: history.snapshotSequence
+          )
+          self.publishStatus("Connected to deterministic local gRPC fixture")
 
-        for try await sequencedEvent in session.events {
-          switch try cursor.stage(sequencedEvent) {
-          case .ignoreDuplicate:
-            continue
-          case .resynchronize:
-            self.publishStatus("Fixture stream needs history resynchronization")
-            return
-          case .deliver:
-            self.apply(sequencedEvent.event)
-            try cursor.acknowledge(sequencedEvent)
+          for try await sequencedEvent in session.events {
+            switch try cursor.stage(sequencedEvent) {
+            case .ignoreDuplicate:
+              continue
+            case .resynchronize:
+              if case .resyncRequired(_, _, let reason) = sequencedEvent.event {
+                self.publishStatus("Fixture history expired; recovering: \(reason)")
+              } else {
+                self.publishStatus("Fixture event gap; reloading canonical history")
+              }
+              return
+            case .deliver:
+              self.apply(sequencedEvent.event)
+              try cursor.acknowledge(sequencedEvent)
+            }
           }
         }
+        self.session = nil
+        guard !Task.isCancelled else { return }
+        self.publishStatus("Fixture stream closed; reconnecting from canonical history…")
+      } catch is CancellationError {
+        self.session = nil
+        self.publishStatus(nil)
+        return
+      } catch {
+        self.session = nil
+        guard !Task.isCancelled else { return }
+        self.publishStatus(
+          "Local fixture unavailable: \(error.localizedDescription). Retrying connection…"
+        )
       }
-      self.publishStatus("Local fixture connection closed")
-    } catch is CancellationError {
-      self.publishStatus(nil)
-    } catch {
-      self.publishStatus(
-        "Local fixture unavailable: \(error.localizedDescription). Start the fixture with --fixture-mode."
-      )
+      do {
+        try await Task.sleep(for: .seconds(1))
+      } catch {
+        return
+      }
     }
   }
 
