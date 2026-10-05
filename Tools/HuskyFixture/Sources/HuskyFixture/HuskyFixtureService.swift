@@ -88,7 +88,7 @@ public struct HuskyFixtureService: HuskyHuskyBackend.SimpleServiceProtocol {
           // sequence-zero idempotency acknowledgement needs direct delivery.
           if accepted.sequence == 0 { continuation.yield(accepted) }
         case .cancelRequest(let cancellation):
-          let cancelled = try await store.cancel(cancellation.requestID, in: conversationID)
+          let cancelled = try await store.cancel(requestID: cancellation.requestID, in: conversationID)
           if cancelled.sequence == 0 { continuation.yield(cancelled) }
         case .endSession:
           continuation.finish()
