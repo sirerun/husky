@@ -53,6 +53,7 @@ let package = Package(
             dependencies: [
                 "HuskyProtocol",
                 .product(name: "GRPCCore", package: "grpc-swift-2"),
+                .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
                 .product(name: "GRPCNIOTransportHTTP2", package: "grpc-swift-nio-transport"),
             ],
             path: "Tools/HuskyFixture/Sources/HuskyFixture",
@@ -84,6 +85,7 @@ let package = Package(
                 .product(name: "GRPCCore", package: "grpc-swift-2"),
                 .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
                 .product(name: "GRPCNIOTransportHTTP2", package: "grpc-swift-nio-transport"),
+                .product(name: "GRPCInProcessTransport", package: "grpc-swift-2"),
             ],
             path: "Tools/HuskyFixture/Tests/HuskyFixtureTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
