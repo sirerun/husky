@@ -29,7 +29,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     return HuskyConversationPage(
       conversations: try response.conversations.map(Self.mapConversation),
       nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor,
-      hasMore: response.hasMore
+      hasMore: response.hasMore_p
     )
   }
 
@@ -68,7 +68,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     return HuskyHistoryPage(
       messages: messages,
       nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor,
-      hasMore: response.hasMore,
+      hasMore: response.hasMore_p,
       snapshotSequence: response.snapshotSequence
     )
   }
