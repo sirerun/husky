@@ -65,6 +65,80 @@ final class HuskyLimitTests: XCTestCase {
     )
   }
 
+  func testDeltaRequiresAStartedMessage() {
+    var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
+    let delta = HuskyChatEvent.textDelta(
+      requestID: "r-1", messageID: "unknown-message", revision: 1, append: "hello", replace: nil
+    )
+
+    XCTAssertThrowsError(
+      try HuskyMessageBodyValidator.apply(
+        delta, maximumBytes: 4096, partialMessages: &partialMessages)
+    ) { error in
+      XCTAssertEqual(
+        error as? HuskyClientError,
+        .malformedResponse("text delta arrived before message start")
+      )
+    }
+    XCTAssertTrue(partialMessages.isEmpty)
+  }
+
+  func testDeltaRequestIDMustMatchStartedMessage() throws {
+    var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
+    let started = HuskyChatEvent.messageStarted(
+      requestID: "r-1",
+      message: HuskyMessage(
+        id: "m-1", conversationID: "c-1", role: .assistant, text: "start",
+        createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 1
+      )
+    )
+    try HuskyMessageBodyValidator.apply(
+      started, maximumBytes: 4096, partialMessages: &partialMessages)
+
+    let mismatched = HuskyChatEvent.textDelta(
+      requestID: "r-2", messageID: "m-1", revision: 1, append: "later", replace: nil
+    )
+    XCTAssertThrowsError(
+      try HuskyMessageBodyValidator.apply(
+        mismatched, maximumBytes: 4096, partialMessages: &partialMessages)
+    ) { error in
+      XCTAssertEqual(
+        error as? HuskyClientError,
+        .malformedResponse("text delta request ID does not match message start")
+      )
+    }
+    XCTAssertEqual(partialMessages["m-1"]?.text, "start")
+    XCTAssertEqual(partialMessages["m-1"]?.revision, 0)
+  }
+
+  func testUnsolicitedMessageRequiresNilDeltaRequestID() throws {
+    var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
+    let started = HuskyChatEvent.messageStarted(
+      requestID: nil,
+      message: HuskyMessage(
+        id: "m-1", conversationID: "c-1", role: .assistant, text: "start",
+        createdAt: Date(timeIntervalSince1970: 0), requestID: nil, sequence: 1
+      )
+    )
+    try HuskyMessageBodyValidator.apply(
+      started, maximumBytes: 4096, partialMessages: &partialMessages)
+    let validDelta = HuskyChatEvent.textDelta(
+      requestID: nil, messageID: "m-1", revision: 1, append: "ed", replace: nil
+    )
+    try HuskyMessageBodyValidator.apply(
+      validDelta, maximumBytes: 4096, partialMessages: &partialMessages)
+    XCTAssertEqual(partialMessages["m-1"]?.text, "started")
+
+    let attributedDelta = HuskyChatEvent.textDelta(
+      requestID: "r-1", messageID: "m-1", revision: 2, append: "wrong", replace: nil
+    )
+    XCTAssertThrowsError(
+      try HuskyMessageBodyValidator.apply(
+        attributedDelta, maximumBytes: 4096, partialMessages: &partialMessages)
+    )
+    XCTAssertEqual(partialMessages["m-1"]?.text, "started")
+  }
+
   func testHistoryAndCompletedMessageTextUseTheUTF8ByteLimit() throws {
     XCTAssertThrowsError(try HuskyMessageBodyValidator.validate("éé", maximumBytes: 3))
 

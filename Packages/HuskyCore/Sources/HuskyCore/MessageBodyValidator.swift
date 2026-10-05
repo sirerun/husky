@@ -35,15 +35,19 @@ enum HuskyMessageBodyValidator {
         requestID: requestID
       )
 
-    case .textDelta(_, let messageID, let revision, let append, let replace):
+    case .textDelta(let requestID, let messageID, let revision, let append, let replace):
+      guard var partial = partialMessages[messageID] else {
+        throw HuskyClientError.malformedResponse("text delta arrived before message start")
+      }
+      guard requestID == partial.requestID else {
+        throw HuskyClientError.malformedResponse(
+          "text delta request ID does not match message start")
+      }
       if let replace {
         try validate(replace, maximumBytes: maximumBytes)
       } else {
         try validate(append, maximumBytes: maximumBytes)
       }
-      var partial =
-        partialMessages[messageID]
-        ?? PartialMessage(revision: 0, text: "", requestID: nil)
       guard revision > partial.revision else {
         throw HuskyClientError.malformedResponse("text delta revisions must increase")
       }
