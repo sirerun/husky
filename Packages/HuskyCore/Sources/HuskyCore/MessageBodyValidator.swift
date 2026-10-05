@@ -21,12 +21,13 @@ enum HuskyMessageBodyValidator {
     partialMessages: inout [String: PartialMessage]
   ) throws {
     switch event {
-    case .messageAccepted(_, let message, _), .messageCompleted(_, let message):
+    case .messageAccepted(_, let message, _):
       try validateConversation(message, expected: expectedConversationID)
       try validate(message.text, maximumBytes: maximumBytes)
       partialMessages.removeValue(forKey: message.id)
 
     case .messageStarted(let requestID, let message):
+      try validateLifecycleRequestID(requestID, nested: message.requestID)
       try validateConversation(message, expected: expectedConversationID)
       try validate(message.text, maximumBytes: maximumBytes)
       partialMessages[message.id] = PartialMessage(
@@ -34,6 +35,12 @@ enum HuskyMessageBodyValidator {
         text: message.text,
         requestID: requestID
       )
+
+    case .messageCompleted(let requestID, let message):
+      try validateLifecycleRequestID(requestID, nested: message.requestID)
+      try validateConversation(message, expected: expectedConversationID)
+      try validate(message.text, maximumBytes: maximumBytes)
+      partialMessages.removeValue(forKey: message.id)
 
     case .textDelta(let requestID, let messageID, let revision, let append, let replace):
       guard var partial = partialMessages[messageID] else {
@@ -70,5 +77,12 @@ enum HuskyMessageBodyValidator {
     guard let expected, message.conversationID != expected else { return }
     throw HuskyClientError.unexpectedConversation(
       expected: expected, actual: message.conversationID)
+  }
+
+  private static func validateLifecycleRequestID(_ eventID: String?, nested: String?) throws {
+    guard eventID == nested else {
+      throw HuskyClientError.malformedResponse(
+        "message lifecycle request ID does not match nested message request ID")
+    }
   }
 }
