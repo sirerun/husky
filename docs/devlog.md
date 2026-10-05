@@ -6,6 +6,8 @@ PR #3 passed renewed independent exact-head review at base `30b1e5a27e105856edc8
 
 T1.0 was rebased on that verified base. The canonical schema and contract freeze record API behavior, source ownership, tool and package versions, package license checks, deployment/architecture assumptions, and native placement. The shared build host's one-minute load was above the configured limit of 10, so multi-package builds are deferred; no build result is claimed by preflight.
 
+T1.9 static scaffolding now defines the root SwiftPM target graph, exact direct dependency versions, plugin-driven public protobuf/client/server code generation, and a read-only-permissions macOS CI workflow for build and tests. Package resolution and validation remain open; `Package.resolved` and any CI result are not yet claimed. The standard hosted macOS runner avoids requiring a paid larger runner.
+
 ## 2026-10-04 — T0.3 bootstrap review remediation
 
 Independent exact-head review of the initial bootstrap change (base `504b574b2ead1718fb2aa64fb969b75ab15d1479`, head `7dc577542570b941d6aaf9f647af1f2596c685b0`) returned BLOCK with three findings: missing repository contributor instructions, an ignored private scratch-path locator in the public plan, and no copyright notice. The reviewer verified that the checked-in Apache LICENSE exactly matched the official text. Remediation adds concise repository instructions and a separate NOTICE naming `Sire Run, Inc.`; LICENSE remains unchanged, and the scratch locator is removed. T0.8 is the required independent exact-head re-review before merge.
