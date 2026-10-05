@@ -1,3 +1,4 @@
+import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
 import HuskyCore
@@ -75,7 +76,7 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
     while !Task.isCancelled {
       do {
         let transport = try HTTP2ClientTransport.Posix.http2NIOPosix(
-          target: .ipv4(host: "127.0.0.1", port: self.port),
+          target: .ipv4(address: "127.0.0.1", port: self.port),
           transportSecurity: .plaintext
         )
         try await withGRPCClient(transport: transport) { grpcClient in
@@ -230,7 +231,7 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
     )
   }
 
-  private static func statusName(_ status: HuskyBackendStatus) -> String {
+  private static func statusName(_ status: HuskyCore.HuskyBackendStatus) -> String {
     switch status {
     case .thinking: "Thinking"
     case .typing: "Typing"
