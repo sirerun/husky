@@ -13,7 +13,8 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
   }
 
   public func getCapabilities() async throws -> HuskyCapabilities {
-    let response = try await self.backend.getCapabilities(HuskyGetCapabilitiesRequest())
+    let response = try await self.backend.getCapabilities(
+      HuskyGetCapabilitiesRequest(), options: HuskyGRPCMapper.unaryCallOptions)
     return try HuskyGRPCMapper.mapCapabilities(response)
   }
 
@@ -25,7 +26,8 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     var request = HuskyListConversationsRequest()
     request.pageSize = pageSize
     request.beforeCursor = cursor ?? ""
-    let response = try await self.backend.listConversations(request)
+    let response = try await self.backend.listConversations(
+      request, options: HuskyGRPCMapper.unaryCallOptions)
     return HuskyConversationPage(
       conversations: try response.conversations.map(Self.mapConversation),
       nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor,
@@ -39,7 +41,8 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     var request = HuskyCreateConversationRequest()
     request.clientRequestID = requestID
     request.title = title
-    let response = try await self.backend.createConversation(request)
+    let response = try await self.backend.createConversation(
+      request, options: HuskyGRPCMapper.unaryCallOptions)
     return try Self.mapConversation(response.conversation)
   }
 
@@ -55,7 +58,8 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     request.conversationID = conversationID
     request.pageSize = pageSize
     request.beforeCursor = cursor ?? ""
-    let response = try await self.backend.getHistory(request)
+    let response = try await self.backend.getHistory(
+      request, options: HuskyGRPCMapper.unaryCallOptions)
     let messages = try response.messages.map { message in
       try Self.mapMessage(
         message,
@@ -230,38 +234,19 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     }
   }
 
-  static func validateEventSequence(_ sequence: UInt64, for event: HuskyChatEvent) throws {
-    switch event {
-    case .sessionReady, .resyncRequired:
-      guard sequence == 0 else {
-        throw HuskyClientError.invalidEventSequence(expected: 0, actual: sequence)
-      }
-    case .messageAccepted(_, let message, let replayed):
-      let expected = replayed ? 0 : message.sequence
-      guard sequence == expected else {
-        throw HuskyClientError.invalidEventSequence(expected: expected, actual: sequence)
-      }
-    case .messageStarted(_, let message), .messageCompleted(_, let message):
-      guard sequence > 0, sequence == message.sequence else {
-        throw HuskyClientError.invalidEventSequence(expected: message.sequence, actual: sequence)
-      }
-    case .textDelta, .statusChanged, .requestCancelled:
-      guard sequence > 0 else {
-        throw HuskyClientError.invalidEventSequence(expected: 1, actual: sequence)
-      }
-    case .requestFailed:
-      // A failed-command reply uses zero. An asynchronous request failure may
-      // be an ordinary sequenced conversation event.
-      break
-    }
-  }
-
   private static func date(seconds: Int64, nanos: Int32) -> Date {
     Date(timeIntervalSince1970: TimeInterval(seconds) + TimeInterval(nanos) / 1_000_000_000)
   }
 }
 
 enum HuskyGRPCMapper {
+  /// Shared deadline for every unary capability, conversation, and history RPC.
+  static var unaryCallOptions: CallOptions {
+    var options = CallOptions.defaults
+    options.timeout = .seconds(15)
+    return options
+  }
+
   static func mapCapabilities(_ response: HuskyGetCapabilitiesResponse) throws -> HuskyCapabilities
   {
     guard response.protocolVersion == "husky.v1" else {
@@ -309,6 +294,35 @@ enum HuskyGRPCMapper {
       maximumHistoryPageSize: response.maximumHistoryPageSize,
       features: Set(response.features)
     )
+  }
+
+  static func validateEventSequence(_ sequence: UInt64, for event: HuskyChatEvent) throws {
+    switch event {
+    case .sessionReady, .resyncRequired:
+      guard sequence == 0 else {
+        throw HuskyClientError.invalidEventSequence(expected: 0, actual: sequence)
+      }
+    case .messageAccepted(_, let message, let replayed):
+      guard message.sequence > 0 else {
+        throw HuskyClientError.invalidEventSequence(expected: 1, actual: message.sequence)
+      }
+      let expected = replayed ? 0 : message.sequence
+      guard sequence == expected else {
+        throw HuskyClientError.invalidEventSequence(expected: expected, actual: sequence)
+      }
+    case .messageStarted(_, let message), .messageCompleted(_, let message):
+      guard sequence > 0, sequence == message.sequence else {
+        throw HuskyClientError.invalidEventSequence(expected: message.sequence, actual: sequence)
+      }
+    case .textDelta, .statusChanged, .requestCancelled:
+      guard sequence > 0 else {
+        throw HuskyClientError.invalidEventSequence(expected: 1, actual: sequence)
+      }
+    case .requestFailed:
+      // A failed-command reply uses zero. An asynchronous request failure may
+      // be an ordinary sequenced conversation event.
+      break
+    }
   }
 }
 
@@ -362,7 +376,7 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
                 event,
                 maximumMessageBytes: maximumMessageBytes
               )
-              try GRPCHuskyChatClient<Transport>.validateEventSequence(
+              try HuskyGRPCMapper.validateEventSequence(
                 event.sequence,
                 for: mapped
               )
