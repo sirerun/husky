@@ -345,6 +345,13 @@ final class HuskyLimitTests: XCTestCase {
     XCTAssertNoThrow(try HuskyGRPCMapper.validateEventSequence(0, for: replayed))
   }
 
+  func testRequestCancelledAcknowledgementMayUseSequenceZero() throws {
+    let cancelled = HuskyChatEvent.requestCancelled(requestID: "r-1")
+
+    XCTAssertNoThrow(try HuskyGRPCMapper.validateEventSequence(0, for: cancelled))
+    XCTAssertNoThrow(try HuskyGRPCMapper.validateEventSequence(7, for: cancelled))
+  }
+
   func testMessageAcceptedRequiresMatchingEnvelopeAndMessageRequestIDs() {
     let accepted = HuskyChatEvent.messageAccepted(
       requestID: "r-1",

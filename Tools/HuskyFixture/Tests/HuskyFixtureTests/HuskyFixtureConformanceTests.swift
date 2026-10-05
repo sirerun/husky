@@ -1,6 +1,7 @@
 import GRPCCore
 import GRPCInProcessTransport
 import GRPCProtobuf
+import HuskyCore
 import HuskyFixture
 import HuskyProtocol
 import XCTest
@@ -298,6 +299,62 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
     }
   }
 
+  func testCancellationAfterCompletionKeepsCoreConversationStreamOpen() async throws {
+    try await withFixture { backend in
+      let conversation = try await self.createConversation(
+        "cancel-after-completion", using: backend)
+      let client = GRPCHuskyChatClient(backend: backend)
+      let session = try await client.openConversation(
+        conversationID: conversation, afterSequence: 0, resumeToken: nil)
+      let recorder = SequencedEventRecorder()
+      let eventTask = Task {
+        for try await event in session.events {
+          await recorder.append(event)
+        }
+      }
+
+      try await session.submit(requestID: "completed-request", text: "first question")
+      try await self.waitForAssistantMessages(1, conversationID: conversation, using: backend)
+      _ = try await self.waitForEvent(in: recorder) { event in
+        if case .messageCompleted(let requestID, _) = event.event {
+          return requestID == "completed-request"
+        }
+        return false
+      }
+
+      try await session.cancel(requestID: "completed-request")
+      let acknowledgement = try await self.waitForEvent(in: recorder) { event in
+        if case .requestCancelled(let requestID) = event.event {
+          return requestID == "completed-request"
+        }
+        return false
+      }
+      XCTAssertEqual(acknowledgement.sequence, 0)
+
+      try await session.submit(requestID: "next-request", text: "second question")
+      _ = try await self.waitForEvent(in: recorder) { event in
+        if case .messageCompleted(let requestID, _) = event.event {
+          return requestID == "next-request"
+        }
+        return false
+      }
+
+      await session.end()
+      do {
+        try await eventTask.value
+      } catch {
+        XCTFail("the cancellation acknowledgement must not terminate the event stream: \(error)")
+      }
+
+      let history = try await backend.getHistory(
+        .with {
+          $0.conversationID = conversation
+          $0.pageSize = 100
+        })
+      XCTAssertEqual(history.messages.filter { $0.role == .assistant }.count, 2)
+    }
+  }
+
   func testUnsolicitedServerMessageHasNoClientRequestIDAndReplaysAfterReconnect() async throws {
     let recorder = EventRecorder()
     try await withFixture(configuration: .init(emitUnsolicitedMessageOnFirstAttach: true)) {
@@ -388,6 +445,17 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
       code: .deadlineExceeded, message: "Fixture completion did not arrive within the test guard.")
   }
 
+  private func waitForEvent(
+    in recorder: SequencedEventRecorder,
+    matching predicate: @Sendable (HuskySequencedEvent) -> Bool
+  ) async throws -> HuskySequencedEvent {
+    for _ in 0..<200 {
+      if let event = await recorder.snapshot().first(where: predicate) { return event }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    throw RPCError(code: .deadlineExceeded, message: "The expected fixture event did not arrive.")
+  }
+
   private func start(conversationID: String, afterSequence: UInt64) -> HuskyClientCommand {
     .with {
       $0.startSession = .with {
@@ -414,4 +482,11 @@ private actor EventRecorder {
   private var events: [HuskyBackendEvent] = []
   func append(_ event: HuskyBackendEvent) { events.append(event) }
   func snapshot() -> [HuskyBackendEvent] { events }
+}
+
+private actor SequencedEventRecorder {
+  private var events: [HuskySequencedEvent] = []
+
+  func append(_ event: HuskySequencedEvent) { events.append(event) }
+  func snapshot() -> [HuskySequencedEvent] { events }
 }

@@ -84,6 +84,7 @@ let package = Package(
         .testTarget(
             name: "HuskyFixtureTests",
             dependencies: [
+                "HuskyCore",
                 "HuskyFixture",
                 "HuskyProtocol",
                 .product(name: "GRPCCore", package: "grpc-swift-2"),

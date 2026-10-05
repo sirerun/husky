@@ -181,6 +181,8 @@ message StatusChanged {
 }
 
 message RequestCancelled {
+  // Envelope sequence zero is a cursor-neutral no-op acknowledgement when the request has already
+  // completed; a cancellation that changes state uses its positive canonical event sequence.
   string request_id = 1;
 }
 
