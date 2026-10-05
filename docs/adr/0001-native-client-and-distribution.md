@@ -10,7 +10,7 @@ The user wants a generic native desktop chat with movable floating glass bubbles
 
 ## Accepted product decisions
 
-1. Float over desktop apps, initially at the bottom right; move composer and bubbles together.
+1. Float over desktop apps, initially at the bottom left of the active display's visible frame; move composer and bubbles together.
 2. Open with composer and recent bubbles visible; support scrolling in both directions.
 3. Preserve the provided reference appearance, with environment-influenced translucent bubble surfaces.
 4. Keep audio/transcription services independent; Husky has no recording controls or dependency on them.
@@ -32,3 +32,7 @@ Prefer custom native appearance over substituting stock Liquid Glass without com
 Native window/focus/material integration is direct, while future non-macOS clients require their own shell. Backend systems must conform or provide an adapter; Husky does not translate arbitrary existing protocols. Credentials/settings/drafts are local, but message history is authoritative on the backend. Automatic-update readiness requires signing, hosting, and a real two-release installation test.
 
 Developer ID/notarization and updater-key availability are open prerequisites. No credential provisioning, release publication, or installation occurs during planning. The empty repository needs a reviewed docs-only genesis before normal code PR delivery; all code candidates then follow independent review and GitHub rebase merge.
+
+## Accepted refinement — 2026-10-04
+
+The user confirmed the supplied glass-chat-2 distribution reference and changed first-launch/default-reset placement from bottom-right to bottom-left, inset from the active display's Dock and screen edges. This supersedes the original placement in decision 1. A valid saved user position still takes precedence on subsequent launches. The refinement is also reflected in `docs/design.md` and the executable delivery plan.
