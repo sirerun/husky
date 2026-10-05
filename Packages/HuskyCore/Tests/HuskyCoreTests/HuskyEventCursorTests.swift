@@ -1,16 +1,19 @@
 import XCTest
+
 @testable import HuskyCore
 
 final class HuskyEventCursorTests: XCTestCase {
   func testCursorAdvancesOnlyAfterAcknowledgementAndIgnoresReplay() throws {
     var cursor = HuskyEventCursor(conversationID: "c-1", afterSequence: 4)
-    let sequencedEvent = HuskySequencedEvent(sequence: 5, event: .messageStarted(
-      requestID: "r-1",
-      message: HuskyMessage(
-        id: "m-1", conversationID: "c-1", role: .assistant, text: "",
-        createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 5
-      )
-    ))
+    let sequencedEvent = HuskySequencedEvent(
+      sequence: 5,
+      event: .messageStarted(
+        requestID: "r-1",
+        message: HuskyMessage(
+          id: "m-1", conversationID: "c-1", role: .assistant, text: "",
+          createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 5
+        )
+      ))
 
     XCTAssertEqual(try cursor.stage(sequencedEvent), .deliver)
     XCTAssertEqual(cursor.lastAppliedSequence, 4)
@@ -20,7 +23,8 @@ final class HuskyEventCursorTests: XCTestCase {
     try cursor.acknowledge(sequencedEvent)
     XCTAssertEqual(cursor.lastAppliedSequence, 5)
     XCTAssertEqual(try cursor.stage(sequencedEvent), .ignoreDuplicate)
-    XCTAssertEqual(try cursor.stage(.init(sequence: 7, event: sequencedEvent.event)), .resynchronize)
+    XCTAssertEqual(
+      try cursor.stage(.init(sequence: 7, event: sequencedEvent.event)), .resynchronize)
     XCTAssertEqual(cursor.lastAppliedSequence, 5)
   }
 
@@ -61,7 +65,8 @@ final class HuskyEventCursorTests: XCTestCase {
     )
 
     XCTAssertThrowsError(try cursor.stage(.init(sequence: 0, event: ready))) {
-      XCTAssertEqual($0 as? HuskyClientError, .unexpectedConversation(expected: "c-1", actual: "c-2"))
+      XCTAssertEqual(
+        $0 as? HuskyClientError, .unexpectedConversation(expected: "c-1", actual: "c-2"))
     }
   }
 }

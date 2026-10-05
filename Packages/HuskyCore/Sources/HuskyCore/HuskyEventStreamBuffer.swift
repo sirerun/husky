@@ -46,7 +46,12 @@ struct HuskyEventStreamBuffer: Sendable {
     }
   }
 
-  func onTermination(_ handler: @escaping @Sendable (AsyncThrowingStream<HuskySequencedEvent, any Error>.Continuation.Termination) -> Void) {
+  func onTermination(
+    _ handler:
+      @escaping @Sendable (
+        AsyncThrowingStream<HuskySequencedEvent, any Error>.Continuation.Termination
+      ) -> Void
+  ) {
     self.continuation.onTermination = handler
   }
 }
