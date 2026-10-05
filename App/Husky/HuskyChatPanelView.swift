@@ -303,5 +303,14 @@ private final class HuskyPreviewChatClient: HuskyChatPanelClient {
     }
   }
 
+  func statusUpdates() -> AsyncStream<String?> {
+    AsyncStream { continuation in
+      continuation.yield(nil)
+      continuation.finish()
+    }
+  }
+
   func submit(_ text: String) async throws {}
+
+  func shutdown() async {}
 }
