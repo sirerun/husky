@@ -10,17 +10,18 @@ final class HuskyFloatingPanelController {
     init(client: any HuskyChatPanelClient, isDemo: Bool = false) {
         model = HuskyChatPanelModel(client: client)
 
-        let screen = Self.activeScreen
-        let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 768)
-        let inset: CGFloat = 24
-        let width = min(560, max(320, visibleFrame.width - inset * 2))
-        let height = min(680, max(360, visibleFrame.height - inset * 2))
-        let initialFrame = NSRect(
-            x: visibleFrame.minX + inset,
-            y: visibleFrame.minY + inset,
-            width: width,
-            height: height
+        let nativeScreens = NSScreen.screens
+        let areas = nativeScreens.map { HuskyPanelScreenArea(frame: $0.frame, visibleFrame: $0.visibleFrame) }
+        let activeScreenIndex = Self.activeScreenIndex(in: nativeScreens)
+        let fallbackArea = HuskyPanelScreenArea(
+            frame: NSRect(x: 0, y: 0, width: 1024, height: 768),
+            visibleFrame: NSRect(x: 0, y: 0, width: 1024, height: 768)
         )
+        let usableAreas = areas.isEmpty ? [fallbackArea] : areas
+        let usableActiveScreenIndex = activeScreenIndex ?? (areas.isEmpty ? 0 : nil)
+        let initialScreen = usableActiveScreenIndex.flatMap { usableAreas.indices.contains($0) ? usableAreas[$0] : nil }
+            ?? usableAreas[0]
+        let initialFrame = HuskyPanelGeometry.initialFrame(in: initialScreen.visibleFrame)
 
         panel = HuskyFloatingPanel(
             contentRect: initialFrame,
@@ -41,7 +42,15 @@ final class HuskyFloatingPanelController {
         panel.contentView = NSHostingView(rootView: HuskyChatPanelView(model: model, isDemo: isDemo))
 
         if panel.setFrameUsingName(Self.frameAutosaveName, force: false) {
-            Self.keepReachable(panel, in: screen?.visibleFrame)
+            if let restoration = HuskyPanelGeometry.restore(
+                savedFrame: panel.frame,
+                screens: usableAreas,
+                activeScreenIndex: usableActiveScreenIndex
+            ) {
+                panel.setFrame(restoration.frame, display: false)
+            } else {
+                panel.setFrame(initialFrame, display: false)
+            }
         } else {
             panel.setFrame(initialFrame, display: false)
         }
@@ -65,28 +74,15 @@ final class HuskyFloatingPanelController {
         }
     }
 
-    private static var activeScreen: NSScreen? {
+    private static func activeScreenIndex(in screens: [NSScreen]) -> Int? {
         let pointer = NSEvent.mouseLocation
-        return NSScreen.screens.first(where: { $0.frame.contains(pointer) })
-            ?? NSApp.keyWindow?.screen
-            ?? NSScreen.main
-    }
-
-    private static func keepReachable(_ panel: NSWindow, in visibleFrame: NSRect?) {
-        guard let visibleFrame else { return }
-        var frame = panel.frame
-        let inset: CGFloat = 24
-        frame.size.width = min(frame.width, max(1, visibleFrame.width - inset * 2))
-        frame.size.height = min(frame.height, max(1, visibleFrame.height - inset * 2))
-        frame.origin.x = min(
-            max(frame.origin.x, visibleFrame.minX + inset),
-            visibleFrame.maxX - inset - frame.width
-        )
-        frame.origin.y = min(
-            max(frame.origin.y, visibleFrame.minY + inset),
-            visibleFrame.maxY - inset - frame.height
-        )
-        panel.setFrame(frame, display: false)
+        return screens.firstIndex(where: { $0.frame.contains(pointer) })
+            ?? NSApp.keyWindow?.screen.flatMap { activeScreen in
+                screens.firstIndex(where: { $0 === activeScreen })
+            }
+            ?? NSScreen.main.flatMap { mainScreen in
+                screens.firstIndex(where: { $0 === mainScreen })
+            }
     }
 }
 
