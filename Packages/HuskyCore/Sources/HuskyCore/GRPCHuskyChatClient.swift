@@ -488,7 +488,7 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
   }
 
   func submit(requestID: String, text: String) async throws {
-    try GRPCHuskyChatClient<Transport>.validateIdentifier(requestID)
+    try HuskyGRPCMapper.validateIdentifier(requestID)
     let bytes = text.utf8.count
     guard bytes <= Int(self.maximumMessageBytes) else {
       throw HuskyClientError.messageTooLarge(
@@ -506,7 +506,7 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
   }
 
   func cancel(requestID: String) async throws {
-    try GRPCHuskyChatClient<Transport>.validateIdentifier(requestID)
+    try HuskyGRPCMapper.validateIdentifier(requestID)
     var cancel = HuskyCancelRequest()
     cancel.requestID = requestID
     var command = HuskyClientCommand()
