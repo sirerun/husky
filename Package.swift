@@ -61,7 +61,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "HuskyFixtureServer",
-            dependencies: ["HuskyFixture"],
+            dependencies: [
+                "HuskyFixture",
+                .product(name: "GRPCCore", package: "grpc-swift-2"),
+                .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
+                .product(name: "GRPCNIOTransportHTTP2", package: "grpc-swift-nio-transport"),
+            ],
             path: "Tools/HuskyFixture/Sources/HuskyFixtureServer",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
