@@ -34,6 +34,53 @@ final class HuskyLimitTests: XCTestCase {
     XCTAssertThrowsError(try HuskyGRPCMapper.mapCapabilities(capabilities))
   }
 
+  func testHistoryValidationRejectsZeroSequence() {
+    let messages = [historyMessage(sequence: 0)]
+
+    XCTAssertThrowsError(
+      try HuskyHistoryValidator.validate(
+        messages, snapshotSequence: 0
+      )
+    ) { error in
+      XCTAssertEqual(
+        error as? HuskyClientError,
+        .malformedResponse("history message sequence is outside its snapshot")
+      )
+    }
+  }
+
+  func testHistoryValidationRejectsSequenceNewerThanSnapshot() {
+    let messages = [historyMessage(sequence: 2)]
+
+    XCTAssertThrowsError(
+      try HuskyHistoryValidator.validate(
+        messages, snapshotSequence: 1
+      )
+    ) { error in
+      XCTAssertEqual(
+        error as? HuskyClientError,
+        .malformedResponse("history message sequence is outside its snapshot")
+      )
+    }
+  }
+
+  func testHistoryValidationAcceptsEmptyZeroSnapshotAndOrderedSnapshotBoundaries() throws {
+    try HuskyHistoryValidator.validate([], snapshotSequence: 0)
+    try HuskyHistoryValidator.validate(
+      [historyMessage(sequence: 1), historyMessage(sequence: 3)], snapshotSequence: 3
+    )
+  }
+
+  func testHistoryValidationPreservesOldestToNewestOrdering() {
+    XCTAssertThrowsError(
+      try HuskyHistoryValidator.validate(
+        [historyMessage(sequence: 2), historyMessage(sequence: 1)], snapshotSequence: 2
+      )
+    ) { error in
+      XCTAssertEqual(error as? HuskyClientError, .historyNotOrdered)
+    }
+  }
+
   func testDeltaValidationChecksAggregateUTF8BytesAndIncreasingRevision() throws {
     var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
     let started = HuskyChatEvent.messageStarted(
@@ -62,6 +109,13 @@ final class HuskyLimitTests: XCTestCase {
     XCTAssertThrowsError(
       try HuskyMessageBodyValidator.apply(
         replacement, maximumBytes: 3, partialMessages: &partialMessages)
+    )
+  }
+
+  private func historyMessage(sequence: UInt64) -> HuskyMessage {
+    HuskyMessage(
+      id: "m-\(sequence)", conversationID: "c-1", role: .assistant, text: "history",
+      createdAt: Date(timeIntervalSince1970: 0), requestID: nil, sequence: sequence
     )
   }
 
