@@ -120,7 +120,8 @@ public enum HuskyChatEvent: Sendable, Equatable {
   case sessionReady(conversationID: String, caughtUpThrough: UInt64, resumeToken: String?)
   case messageAccepted(requestID: String, userMessage: HuskyMessage, replayed: Bool)
   case messageStarted(requestID: String?, message: HuskyMessage)
-  case textDelta(requestID: String?, messageID: String, revision: UInt64, append: String, replace: String?)
+  case textDelta(
+    requestID: String?, messageID: String, revision: UInt64, append: String, replace: String?)
   case messageCompleted(requestID: String?, message: HuskyMessage)
   case statusChanged(requestID: String?, status: HuskyBackendStatus, detail: String)
   case requestCancelled(requestID: String)

@@ -73,16 +73,18 @@ public struct HuskyEventCursor: Sendable, Equatable {
 
   /// Validates an event without advancing the reconnect cursor. The consumer
   /// must call `acknowledge(_:)` only after it has applied the event to state.
-  public mutating func stage(_ sequencedEvent: HuskySequencedEvent) throws -> HuskyEventDisposition {
+  public mutating func stage(_ sequencedEvent: HuskySequencedEvent) throws -> HuskyEventDisposition
+  {
     guard self.pendingEvent == nil else {
       throw HuskyClientError.eventApplicationPending(
         sequence: self.pendingEvent?.sequence ?? self.lastAppliedSequence
       )
     }
     switch sequencedEvent.event {
-    case let .sessionReady(conversationID, caughtUpThrough, token):
+    case .sessionReady(let conversationID, let caughtUpThrough, let token):
       guard conversationID == self.conversationID else {
-        throw HuskyClientError.unexpectedConversation(expected: self.conversationID, actual: conversationID)
+        throw HuskyClientError.unexpectedConversation(
+          expected: self.conversationID, actual: conversationID)
       }
       // The server sends SessionReady after replaying retained events, so the
       // watermark must equal the cursor already applied by the consumer.
@@ -94,9 +96,10 @@ public struct HuskyEventCursor: Sendable, Equatable {
       self.pendingResumeToken = token
       return .deliver
 
-    case let .resyncRequired(conversationID, _, _):
+    case .resyncRequired(let conversationID, _, _):
       guard conversationID == self.conversationID else {
-        throw HuskyClientError.unexpectedConversation(expected: self.conversationID, actual: conversationID)
+        throw HuskyClientError.unexpectedConversation(
+          expected: self.conversationID, actual: conversationID)
       }
       return .resynchronize
 
