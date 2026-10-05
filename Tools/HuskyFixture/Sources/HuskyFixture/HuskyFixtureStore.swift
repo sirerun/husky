@@ -68,7 +68,7 @@ public actor HuskyFixtureStore {
     let summaries = conversationOrder[start..<end].compactMap { conversations[$0]?.summary }
     return .with {
       $0.conversations = summaries
-      $0.hasMore = start > 0
+      $0.hasMore_p = start > 0
       $0.nextCursor = start > 0 ? encodeCursor("conversations", start) : ""
     }
   }
@@ -136,7 +136,7 @@ public actor HuskyFixtureStore {
     let page = Array(conversation.messages[start..<before])
     return .with {
       $0.messages = page
-      $0.hasMore = start > 0
+      $0.hasMore_p = start > 0
       $0.nextCursor =
         start > 0
         ? encodeHistoryCursor(
@@ -205,7 +205,7 @@ public actor HuskyFixtureStore {
       let delay = configuration.responseStepDelay
       Task {
         if delay > .zero { try? await Task.sleep(for: delay) }
-        await self.emitUnsolicitedMessage(in: conversationID)
+        self.emitUnsolicitedMessage(in: conversationID)
       }
     }
     return false
