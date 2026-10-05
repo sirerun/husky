@@ -3,7 +3,7 @@ import CoreGraphics
 enum HuskyPanelLayout {
   static let sizeScale: CGFloat = 0.8
   static let width: CGFloat = 560 * sizeScale
-  static let height: CGFloat = 660 * sizeScale
+  static let height: CGFloat = 680 * sizeScale
   static let transcriptMinimumHeight: CGFloat = 220 * sizeScale
   static let transcriptMaximumHeight: CGFloat = 510 * sizeScale
   static let messageMaximumWidth: CGFloat = 560 * 0.87 * sizeScale
@@ -42,10 +42,12 @@ enum HuskyPanelGeometry {
     guard savedFrame.width == 560, savedFrame.height == 660 || savedFrame.height == 680 else {
       return savedFrame
     }
-    // 680 points was the original request; the rendered panel autosaved at 660.
     return CGRect(
       origin: savedFrame.origin,
-      size: CGSize(width: HuskyPanelLayout.width, height: HuskyPanelLayout.height)
+      size: CGSize(
+        width: savedFrame.width * HuskyPanelLayout.sizeScale,
+        height: savedFrame.height * HuskyPanelLayout.sizeScale
+      )
     )
   }
 
