@@ -187,6 +187,43 @@ final class HuskyLimitTests: XCTestCase {
     }
   }
 
+  func testNonReplayMessageAcceptanceRequiresPositiveSequence() throws {
+    let acceptedMessage = HuskyMessage(
+      id: "m-1", conversationID: "c-1", role: .user, text: "hello",
+      createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 0
+    )
+    let accepted = HuskyChatEvent.messageAccepted(
+      requestID: "r-1", userMessage: acceptedMessage, replayed: false
+    )
+    XCTAssertThrowsError(try HuskyGRPCMapper.validateEventSequence(0, for: accepted)) { error in
+      XCTAssertEqual(error as? HuskyClientError, .invalidEventSequence(expected: 1, actual: 0))
+    }
+
+    let acceptedWithSequence = HuskyChatEvent.messageAccepted(
+      requestID: "r-1",
+      userMessage: HuskyMessage(
+        id: "m-1", conversationID: "c-1", role: .user, text: "hello",
+        createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 7
+      ),
+      replayed: false
+    )
+    XCTAssertNoThrow(try HuskyGRPCMapper.validateEventSequence(7, for: acceptedWithSequence))
+
+    let replayed = HuskyChatEvent.messageAccepted(
+      requestID: "r-1",
+      userMessage: HuskyMessage(
+        id: "m-1", conversationID: "c-1", role: .user, text: "hello",
+        createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 7
+      ),
+      replayed: true
+    )
+    XCTAssertNoThrow(try HuskyGRPCMapper.validateEventSequence(0, for: replayed))
+  }
+
+  func testUnaryRPCDeadlineIsBoundedAndShared() {
+    XCTAssertEqual(HuskyGRPCMapper.unaryCallOptions.timeout, .seconds(15))
+  }
+
   private func validCapabilities() -> HuskyGetCapabilitiesResponse {
     var response = HuskyGetCapabilitiesResponse()
     response.protocolVersion = "husky.v1"
