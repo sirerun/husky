@@ -44,10 +44,7 @@ enum HuskyPanelGeometry {
     }
     return CGRect(
       origin: savedFrame.origin,
-      size: CGSize(
-        width: savedFrame.width * HuskyPanelLayout.sizeScale,
-        height: savedFrame.height * HuskyPanelLayout.sizeScale
-      )
+      size: CGSize(width: HuskyPanelLayout.width, height: HuskyPanelLayout.height)
     )
   }
 
