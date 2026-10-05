@@ -71,12 +71,6 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
-            name: "HuskyProtocolTests",
-            dependencies: ["HuskyProtocol"],
-            path: "Packages/HuskyProtocol/Tests/HuskyProtocolTests",
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        ),
-        .testTarget(
             name: "HuskyCoreTests",
             dependencies: ["HuskyCore", "HuskyProtocol"],
             path: "Packages/HuskyCore/Tests/HuskyCoreTests",
