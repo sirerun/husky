@@ -25,7 +25,6 @@ struct HuskyChatPanelView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityLiveRegion(.assertive)
             }
         }
         .padding(18)
