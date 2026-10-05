@@ -282,6 +282,10 @@ final class HuskyLimitTests: XCTestCase {
       replayed: false
     )
     XCTAssertNoThrow(try HuskyGRPCMapper.validateEventSequence(7, for: acceptedWithSequence))
+    XCTAssertThrowsError(try HuskyGRPCMapper.validateEventSequence(8, for: acceptedWithSequence)) {
+      error in
+      XCTAssertEqual(error as? HuskyClientError, .invalidEventSequence(expected: 7, actual: 8))
+    }
 
     let replayed = HuskyChatEvent.messageAccepted(
       requestID: "r-1",
@@ -292,6 +296,24 @@ final class HuskyLimitTests: XCTestCase {
       replayed: true
     )
     XCTAssertNoThrow(try HuskyGRPCMapper.validateEventSequence(0, for: replayed))
+  }
+
+  func testMessageAcceptedRequiresMatchingEnvelopeAndMessageRequestIDs() {
+    let accepted = HuskyChatEvent.messageAccepted(
+      requestID: "r-1",
+      userMessage: HuskyMessage(
+        id: "m-1", conversationID: "c-1", role: .user, text: "hello",
+        createdAt: Date(timeIntervalSince1970: 0), requestID: "r-2", sequence: 7
+      ),
+      replayed: false
+    )
+
+    XCTAssertThrowsError(try HuskyGRPCMapper.validateEventSequence(7, for: accepted)) { error in
+      XCTAssertEqual(
+        error as? HuskyClientError,
+        .malformedResponse("accepted message request ID does not match event request ID")
+      )
+    }
   }
 
   func testUnaryRPCDeadlineIsBoundedAndShared() {

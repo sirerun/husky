@@ -302,7 +302,11 @@ enum HuskyGRPCMapper {
       guard sequence == 0 else {
         throw HuskyClientError.invalidEventSequence(expected: 0, actual: sequence)
       }
-    case .messageAccepted(_, let message, let replayed):
+    case .messageAccepted(let requestID, let message, let replayed):
+      guard message.requestID == requestID else {
+        throw HuskyClientError.malformedResponse(
+          "accepted message request ID does not match event request ID")
+      }
       guard message.sequence > 0 else {
         throw HuskyClientError.invalidEventSequence(expected: 1, actual: message.sequence)
       }
