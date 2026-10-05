@@ -103,6 +103,9 @@ public actor HuskyFixtureStore {
   }
 
   func history(_ request: HuskyGetHistoryRequest) throws -> HuskyGetHistoryResponse {
+    guard !request.conversationID.isEmpty else {
+      throw rpcError(.invalidArgument, "conversation_id must not be empty.")
+    }
     guard let conversation = conversations[request.conversationID] else {
       throw rpcError(.failedPrecondition, "The requested fixture conversation does not exist.")
     }
@@ -153,6 +156,9 @@ public actor HuskyFixtureStore {
     subscriptionID: UUID,
     continuation: AsyncStream<HuskyBackendEvent>.Continuation
   ) throws -> Bool {
+    guard !conversationID.isEmpty else {
+      throw rpcError(.invalidArgument, "conversation_id must not be empty.")
+    }
     guard var conversation = conversations[conversationID] else {
       throw rpcError(.failedPrecondition, "The requested fixture conversation does not exist.")
     }
@@ -303,6 +309,9 @@ public actor HuskyFixtureStore {
   }
 
   func cancel(requestID: String, in conversationID: String) throws -> HuskyBackendEvent {
+    guard !requestID.isEmpty else {
+      throw rpcError(.invalidArgument, "request_id must not be empty.")
+    }
     guard var conversation = conversations[conversationID] else {
       throw rpcError(.failedPrecondition, "The requested fixture conversation does not exist.")
     }
