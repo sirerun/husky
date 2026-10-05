@@ -9,7 +9,7 @@ final class HuskyChatPanelModel {
     private(set) var statusText: String?
 
     private let client: any HuskyChatPanelClient
-    nonisolated private var updatesTask: Task<Void, Never>?
+    @ObservationIgnored private var updatesTask: Task<Void, Never>?
 
     init(client: any HuskyChatPanelClient) {
         self.client = client
@@ -22,7 +22,9 @@ final class HuskyChatPanelModel {
     }
 
     deinit {
-        updatesTask?.cancel()
+        MainActor.assumeIsolated {
+            updatesTask?.cancel()
+        }
     }
 
     func submit(_ text: String) async -> Bool {
