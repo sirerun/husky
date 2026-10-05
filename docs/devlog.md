@@ -1,5 +1,13 @@
 # Husky devlog
 
+## 2026-10-05 — T1 local build/tests and fixture round trip; native and delivery gates open
+
+Integrated candidate `1fd2f084a35629bb32df95035d0408101174def3` passes the full Swift test suite: 8 `HuskyFixtureTests` and 23 `HuskyCoreTests` (31 XCTest cases, zero failures). The fixture history test now walks all cursor pages, checks a stable snapshot and ordering, and verifies ten unique messages. The app build passed at `74b10720d5c5964fb444a8fdedff21be6146be07`; later commits changed fixture test code only. Tracked Swift sources under `App/`, `Packages/`, and `Tools/` pass `xcrun swift-format lint --strict`; `git diff --check` and `swift package dump-package` pass at the current test head.
+
+The native app was launched in explicit fixture mode against `HuskyFixtureServer`. Process/socket inspection confirmed the server bound only `127.0.0.1:50051` and the app connected to it. The native accessibility tree showed “Connected to deterministic local gRPC fixture”; sending a message rendered the user bubble, the deterministic backend response, and “Idle — Local deterministic fixture status.” The panel showed the fixture label and no titlebar/chrome. Both coordinator-started app and server processes were stopped afterward. This is a local round-trip proof, not CI or production backend acceptance.
+
+Independent code-source review most recently passed at `1e0b04f9eccb568b60af2900a31c54bc4b5201b7`, including accepted/started/completed event identity and sequence checks. Later candidate changes are test-only. A native screenshot confirmed the panel rendered, but the complete T1.1 evidence is still open: reference comparison; drag, scroll, focus/IME, light/dark and busy backgrounds, visible desktop through margins, fresh-preferences bottom-left launch, saved-position restore, Dock/monitor changes, and Reduce Transparency/Motion. CI has not run. T1.1–T1.9 remain unchecked pending that acceptance, CI, fresh full T1.4 exact-head review, PR/merge, and landed verification. No release signing, packaging, installation, or updater work was performed.
+
 ## 2026-10-05 — T1 foundation source integrated; executable gates still open
 
 The foundation candidate `824a5920f11fb164ebf124ac7da91e402aa3407d` integrates the AppKit/SwiftUI panel, versioned `husky.v1` bindings, bounded typed gRPC client, deterministic fixture server/tests, SwiftPM target graph, pinned `Package.resolved`, and macOS CI workflow. `--fixture-mode --fixture-port 50051` explicitly connects the native panel to the local fixture at `127.0.0.1`; default launch remains unconfigured. The fixture is labeled and is not a production backend. Follow-up fixes preserve the selected conversation across paginated reconnects and await `EndSession` before application termination.
