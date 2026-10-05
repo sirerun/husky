@@ -65,12 +65,12 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
     try await withFixture { backend in
       let conversation = try await createConversation("history", using: backend)
       try await backend.conversationSession { writer in
-        try await writer.write(start(conversationID: conversation, afterSequence: 0))
+        try await writer.write(self.start(conversationID: conversation, afterSequence: 0))
         for index in 1...5 {
           try await writer.write(
-            submit("history-\(index)", "message \(index)", conversationID: conversation))
+            self.submit("history-\(index)", "message \(index)", conversationID: conversation))
         }
-        try await waitForAssistantMessages(5, conversationID: conversation, using: backend)
+        try await self.waitForAssistantMessages(5, conversationID: conversation, using: backend)
         try await writer.write(.with { $0.endSession = .init() })
       } onResponse: { response in
         for try await _ in response.messages {}
@@ -107,9 +107,11 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
     try await withFixture { backend in
       let conversation = try await createConversation("duplicate", using: backend)
       try await backend.conversationSession { writer in
-        try await writer.write(start(conversationID: conversation, afterSequence: 0))
-        try await writer.write(submit("stable-id", "same payload", conversationID: conversation))
-        try await writer.write(submit("stable-id", "same payload", conversationID: conversation))
+        try await writer.write(self.start(conversationID: conversation, afterSequence: 0))
+        try await writer.write(
+          self.submit("stable-id", "same payload", conversationID: conversation))
+        try await writer.write(
+          self.submit("stable-id", "same payload", conversationID: conversation))
         try await Task.sleep(for: .milliseconds(150))
         try await writer.write(.with { $0.cancelRequest.requestID = "stable-id" })
         try await writer.write(.with { $0.endSession = .init() })
@@ -141,9 +143,11 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
       let conversation = try await createConversation("invalid-duplicate", using: backend)
       do {
         try await backend.conversationSession { writer in
-          try await writer.write(start(conversationID: conversation, afterSequence: 0))
-          try await writer.write(submit("same-id", "first payload", conversationID: conversation))
-          try await writer.write(submit("same-id", "changed payload", conversationID: conversation))
+          try await writer.write(self.start(conversationID: conversation, afterSequence: 0))
+          try await writer.write(
+            self.submit("same-id", "first payload", conversationID: conversation))
+          try await writer.write(
+            self.submit("same-id", "changed payload", conversationID: conversation))
         } onResponse: { response in
           for try await _ in response.messages {}
         }
@@ -155,9 +159,10 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
       let oversizedConversation = try await createConversation("oversized", using: backend)
       do {
         try await backend.conversationSession { writer in
-          try await writer.write(start(conversationID: oversizedConversation, afterSequence: 0))
           try await writer.write(
-            submit(
+            self.start(conversationID: oversizedConversation, afterSequence: 0))
+          try await writer.write(
+            self.submit(
               "oversized-id", String(repeating: "é", count: 32_769),
               conversationID: oversizedConversation))
         } onResponse: { response in
@@ -181,7 +186,7 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
 
       do {
         try await backend.conversationSession { writer in
-          try await writer.write(start(conversationID: "", afterSequence: 0))
+          try await writer.write(self.start(conversationID: "", afterSequence: 0))
         } onResponse: { response in
           for try await _ in response.messages {}
         }
@@ -197,7 +202,7 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
       let conversation = try await createConversation("empty-cancel", using: backend)
       do {
         try await backend.conversationSession { writer in
-          try await writer.write(start(conversationID: conversation, afterSequence: 0))
+          try await writer.write(self.start(conversationID: conversation, afterSequence: 0))
           try await writer.write(.with { $0.cancelRequest.requestID = "" })
         } onResponse: { response in
           for try await _ in response.messages {}
@@ -216,11 +221,11 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
     ) { backend in
       let conversation = try await createConversation("cancel", using: backend)
       try await backend.conversationSession { writer in
-        try await writer.write(start(conversationID: conversation, afterSequence: 0))
+        try await writer.write(self.start(conversationID: conversation, afterSequence: 0))
         for index in 1...3 {
           let requestID = "cancel-me-\(index)"
           try await writer.write(
-            submit(requestID, "long scripted response", conversationID: conversation))
+            self.submit(requestID, "long scripted response", conversationID: conversation))
           try await writer.write(.with { $0.cancelRequest.requestID = requestID })
         }
         try await writer.write(.with { $0.endSession = .init() })
@@ -244,7 +249,7 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
 
       let resyncRecorder = EventRecorder()
       try await backend.conversationSession { writer in
-        try await writer.write(start(conversationID: conversation, afterSequence: 0))
+        try await writer.write(self.start(conversationID: conversation, afterSequence: 0))
       } onResponse: { response in
         for try await event in response.messages { await resyncRecorder.append(event) }
       }
@@ -264,7 +269,7 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
       backend in
       let conversation = try await createConversation("unsolicited", using: backend)
       try await backend.conversationSession { writer in
-        try await writer.write(start(conversationID: conversation, afterSequence: 0))
+        try await writer.write(self.start(conversationID: conversation, afterSequence: 0))
         try await Task.sleep(for: .milliseconds(100))
         try await writer.write(.with { $0.endSession = .init() })
       } onResponse: { response in
@@ -286,7 +291,7 @@ final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
 
       let reconnect = EventRecorder()
       try await backend.conversationSession { writer in
-        try await writer.write(start(conversationID: conversation, afterSequence: watermark))
+        try await writer.write(self.start(conversationID: conversation, afterSequence: watermark))
         try await writer.write(.with { $0.endSession = .init() })
       } onResponse: { response in
         for try await event in response.messages { await reconnect.append(event) }
