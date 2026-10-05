@@ -236,6 +236,53 @@ final class HuskyLimitTests: XCTestCase {
     }
   }
 
+  func testMessageStartedAndCompletedRejectNestedRequestIDMismatch() {
+    let message = HuskyMessage(
+      id: "m-1", conversationID: "c-1", role: .assistant, text: "hello",
+      createdAt: Date(timeIntervalSince1970: 0), requestID: "r-2", sequence: 1
+    )
+    let mismatchedEvents: [HuskyChatEvent] = [
+      .messageStarted(requestID: "r-1", message: message),
+      .messageCompleted(requestID: "r-1", message: message),
+    ]
+
+    for event in mismatchedEvents {
+      var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
+      XCTAssertThrowsError(
+        try HuskyMessageBodyValidator.apply(
+          event, maximumBytes: 4096, partialMessages: &partialMessages)
+      ) { error in
+        XCTAssertEqual(
+          error as? HuskyClientError,
+          .malformedResponse(
+            "message lifecycle request ID does not match nested message request ID")
+        )
+      }
+      XCTAssertTrue(partialMessages.isEmpty)
+    }
+  }
+
+  func testUnsolicitedMessageStartedAndCompletedAllowMatchingNilRequestIDs() throws {
+    let message = HuskyMessage(
+      id: "m-1", conversationID: "c-1", role: .assistant, text: "hello",
+      createdAt: Date(timeIntervalSince1970: 0), requestID: nil, sequence: 1
+    )
+    var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
+    try HuskyMessageBodyValidator.apply(
+      .messageStarted(requestID: nil, message: message),
+      maximumBytes: 4096,
+      partialMessages: &partialMessages
+    )
+    XCTAssertNil(partialMessages["m-1"]?.requestID)
+
+    try HuskyMessageBodyValidator.apply(
+      .messageCompleted(requestID: nil, message: message),
+      maximumBytes: 4096,
+      partialMessages: &partialMessages
+    )
+    XCTAssertNil(partialMessages["m-1"])
+  }
+
   func testRequestCancellationAndFailureClearPartialMessages() throws {
     for terminalEvent in [
       HuskyChatEvent.requestCancelled(requestID: "r-1"),
