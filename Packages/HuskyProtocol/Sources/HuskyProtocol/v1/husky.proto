@@ -1,0 +1,198 @@
+syntax = "proto3";
+
+package husky.v1;
+
+option swift_prefix = "Husky";
+
+import "google/protobuf/timestamp.proto";
+
+// Husky is a typed chat client. Audio capture, transcription, and tool
+// execution are outside this protocol.
+service HuskyBackend {
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+  rpc CreateConversation(CreateConversationRequest) returns (CreateConversationResponse);
+  rpc GetHistory(GetHistoryRequest) returns (GetHistoryResponse);
+
+  // A client starts each stream with StartSession. Submissions and
+  // cancellations share the same stream as unsolicited backend events.
+  rpc ConversationSession(stream ClientCommand) returns (stream BackendEvent);
+}
+
+message GetCapabilitiesRequest {}
+
+message GetCapabilitiesResponse {
+  string protocol_version = 1; // Must be "husky.v1" for this schema.
+  uint32 minimum_client_major = 2;
+  uint32 maximum_client_major = 3;
+  uint32 maximum_message_utf8_bytes = 4;
+  uint32 default_history_page_size = 5;
+  uint32 maximum_history_page_size = 6;
+  repeated string features = 7;
+}
+
+message ListConversationsRequest {
+  uint32 page_size = 1;
+  string before_cursor = 2;
+}
+
+message ListConversationsResponse {
+  repeated ConversationSummary conversations = 1;
+  string next_cursor = 2;
+  bool has_more = 3;
+}
+
+message CreateConversationRequest {
+  string client_request_id = 1;
+  string title = 2;
+}
+
+message CreateConversationResponse {
+  ConversationSummary conversation = 1;
+}
+
+message ConversationSummary {
+  string conversation_id = 1;
+  string title = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+message GetHistoryRequest {
+  string conversation_id = 1;
+  uint32 page_size = 2;
+  string before_cursor = 3;
+}
+
+message GetHistoryResponse {
+  repeated ChatMessage messages = 1; // Oldest to newest within this page.
+  string next_cursor = 2;
+  bool has_more = 3;
+  // First-page responses also establish the boundary used to attach a live stream.
+  uint64 snapshot_sequence = 4;
+}
+
+enum MessageRole {
+  MESSAGE_ROLE_UNSPECIFIED = 0;
+  MESSAGE_ROLE_USER = 1;
+  MESSAGE_ROLE_ASSISTANT = 2;
+  MESSAGE_ROLE_SYSTEM = 3;
+}
+
+message ChatMessage {
+  string message_id = 1;
+  string conversation_id = 2;
+  MessageRole role = 3;
+  string text = 4;
+  google.protobuf.Timestamp created_at = 5;
+  string request_id = 6;
+  uint64 sequence = 7;
+}
+
+message ClientCommand {
+  oneof command {
+    StartSession start_session = 1;
+    SubmitMessage submit_message = 2;
+    CancelRequest cancel_request = 3;
+    EndSession end_session = 4;
+  }
+}
+
+message StartSession {
+  string conversation_id = 1;
+  uint64 after_sequence = 2;
+  string resume_token = 3;
+}
+
+message SubmitMessage {
+  string request_id = 1;
+  string conversation_id = 2;
+  string text = 3;
+}
+
+message CancelRequest {
+  string request_id = 1;
+}
+
+message EndSession {}
+
+message BackendEvent {
+  // State-changing conversation events start at one and increase strictly.
+  // Control events and replay acknowledgements use zero and do not advance it.
+  uint64 sequence = 1;
+  oneof event {
+    SessionReady session_ready = 2;
+    MessageAccepted message_accepted = 3;
+    MessageStarted message_started = 4;
+    TextDelta text_delta = 5;
+    MessageCompleted message_completed = 6;
+    StatusChanged status_changed = 7;
+    RequestCancelled request_cancelled = 8;
+    RequestFailed request_failed = 9;
+    ResyncRequired resync_required = 10;
+  }
+}
+
+message SessionReady {
+  string conversation_id = 1;
+  uint64 caught_up_through_sequence = 2;
+  string resume_token = 3;
+}
+
+message MessageAccepted {
+  string request_id = 1;
+  ChatMessage user_message = 2;
+  bool replayed_idempotent_result = 3;
+}
+
+message MessageStarted {
+  string request_id = 1;
+  ChatMessage message = 2;
+}
+
+message TextDelta {
+  string request_id = 1;
+  string message_id = 2;
+  uint64 revision = 3;
+  string append_text = 4;
+  // When present, replace the complete accumulated text. This takes precedence
+  // over append_text and supports backends that revise an earlier response.
+  optional string replace_text = 5;
+}
+
+message MessageCompleted {
+  string request_id = 1;
+  ChatMessage message = 2; // Canonical full text replaces all accumulated deltas.
+}
+
+enum BackendStatus {
+  BACKEND_STATUS_UNSPECIFIED = 0;
+  BACKEND_STATUS_THINKING = 1;
+  BACKEND_STATUS_TYPING = 2;
+  BACKEND_STATUS_WAITING = 3;
+  BACKEND_STATUS_IDLE = 4;
+  BACKEND_STATUS_ERROR = 5;
+}
+
+message StatusChanged {
+  string request_id = 1;
+  BackendStatus status = 2;
+  string detail = 3;
+}
+
+message RequestCancelled {
+  string request_id = 1;
+}
+
+message RequestFailed {
+  string request_id = 1;
+  string public_code = 2;
+  string message = 3;
+  bool retryable = 4;
+}
+
+message ResyncRequired {
+  string conversation_id = 1;
+  uint64 oldest_available_sequence = 2;
+  string reason = 3;
+}
