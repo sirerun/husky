@@ -6,6 +6,8 @@ Independent exact-head review of the initial bootstrap change (base `504b574b2ea
 
 T0.7 verification: the delivery-plan parser resolved 24 unique tasks and all dependency references; public-file hygiene search found no scratch locator or private local-path disclosure; all planning-document relative Markdown links resolve; `git diff --check` passes; the repository's Apache LICENSE has no diff; GitHub metadata identifies the repository as public with Apache-2.0 licensing. The new NOTICE contains the supplied holder name. No source implementation was added. These are local verification results, not CI or release evidence.
 
+T0.8 exact-head review passed independently on PR #3 at base `30b1e5a27e105856edc8cdd99b068a2cb428eaa8` and head `b26d2618b783bb538b117f985ceee82ec6b36d8d`. The reviewer authored none of the remediation, confirmed all three finding dispositions, verified equal LICENSE blob IDs and found no blocker. Any later PR head requires renewed exact-head review.
+
 ## 2026-10-03 — initial discovery and delivery planning
 
 Confirmed the product boundary, multiple profile/conversation behavior, backend-owned history, common gRPC integration, and independent audio-service boundary through user clarification. The user then requested a plan covering build, public Apache-licensed release, local installation, and automatic self-updates.
