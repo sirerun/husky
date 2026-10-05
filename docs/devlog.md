@@ -1,5 +1,9 @@
 # Husky devlog
 
+## 2026-10-05 — Explicit chat window move handle
+
+Added a visible header move icon with its own drag gesture, accessibility label/hint, and help text so users can find and grab the floating chat window. `swift build`, the complete Swift test suite (31 tests), strict formatting lint for the changed view, and `git diff --check` pass locally. An independent Luna review found no source blocker. CUA confirms the move handle is exposed in the accessibility tree, but the coordinate-based drag probes did not produce reliable frame movement evidence; retain the native drag/position-restore acceptance gate as open. Draft PR #4 remains blocked from hosted CI because GitHub has not started a runner under the account billing lock.
+
 ## 2026-10-05 — T1 local build/tests and fixture round trip; native and delivery gates open
 
 Integrated candidate `1fd2f084a35629bb32df95035d0408101174def3` passes the full Swift test suite: 8 `HuskyFixtureTests` and 23 `HuskyCoreTests` (31 XCTest cases, zero failures). The fixture history test now walks all cursor pages, checks a stable snapshot and ordering, and verifies ten unique messages. The app build passed at `74b10720d5c5964fb444a8fdedff21be6146be07`; later commits changed fixture test code only. Tracked Swift sources under `App/`, `Packages/`, and `Tools/` pass `xcrun swift-format lint --strict`; `git diff --check` and `swift package dump-package` pass at the current test head.
