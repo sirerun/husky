@@ -33,7 +33,8 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     )
   }
 
-  public func createConversation(requestID: String, title: String) async throws -> HuskyConversation {
+  public func createConversation(requestID: String, title: String) async throws -> HuskyConversation
+  {
     try Self.validateIdentifier(requestID)
     var request = HuskyCreateConversationRequest()
     request.clientRequestID = requestID
@@ -99,13 +100,16 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     }
   }
 
-  static func mapConversation(_ conversation: HuskyConversationSummary) throws -> HuskyConversation {
+  static func mapConversation(_ conversation: HuskyConversationSummary) throws -> HuskyConversation
+  {
     try validateIdentifier(conversation.conversationID)
     return HuskyConversation(
       id: conversation.conversationID,
       title: conversation.title,
-      createdAt: Self.date(seconds: conversation.createdAt.seconds, nanos: conversation.createdAt.nanos),
-      updatedAt: Self.date(seconds: conversation.updatedAt.seconds, nanos: conversation.updatedAt.nanos)
+      createdAt: Self.date(
+        seconds: conversation.createdAt.seconds, nanos: conversation.createdAt.nanos),
+      updatedAt: Self.date(
+        seconds: conversation.updatedAt.seconds, nanos: conversation.updatedAt.nanos)
     )
   }
 
@@ -129,7 +133,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     case .assistant: role = .assistant
     case .system: role = .system
     case .unspecified: throw HuskyClientError.unsupportedMessageRole(0)
-    case let .UNRECOGNIZED(rawValue): throw HuskyClientError.unsupportedMessageRole(rawValue)
+    case .UNRECOGNIZED(let rawValue): throw HuskyClientError.unsupportedMessageRole(rawValue)
     }
     return HuskyMessage(
       id: message.messageID,
@@ -147,26 +151,26 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     maximumMessageBytes: UInt32
   ) throws -> HuskyChatEvent {
     switch event.event {
-    case let .sessionReady(value):
+    case .sessionReady(let value):
       try validateIdentifier(value.conversationID)
       return .sessionReady(
         conversationID: value.conversationID,
         caughtUpThrough: value.caughtUpThroughSequence,
         resumeToken: value.resumeToken.isEmpty ? nil : value.resumeToken
       )
-    case let .messageAccepted(value):
+    case .messageAccepted(let value):
       try validateIdentifier(value.requestID)
       return .messageAccepted(
         requestID: value.requestID,
         userMessage: try mapMessage(value.userMessage, maximumMessageBytes: maximumMessageBytes),
         replayed: value.replayedIdempotentResult
       )
-    case let .messageStarted(value):
+    case .messageStarted(let value):
       return .messageStarted(
         requestID: value.requestID.isEmpty ? nil : value.requestID,
         message: try mapMessage(value.message, maximumMessageBytes: maximumMessageBytes)
       )
-    case let .textDelta(value):
+    case .textDelta(let value):
       try validateIdentifier(value.messageID)
       if value.hasReplaceText {
         try HuskyMessageBodyValidator.validate(value.replaceText, maximumBytes: maximumMessageBytes)
@@ -180,21 +184,21 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
         append: value.appendText,
         replace: value.hasReplaceText ? value.replaceText : nil
       )
-    case let .messageCompleted(value):
+    case .messageCompleted(let value):
       return .messageCompleted(
         requestID: value.requestID.isEmpty ? nil : value.requestID,
         message: try mapMessage(value.message, maximumMessageBytes: maximumMessageBytes)
       )
-    case let .statusChanged(value):
+    case .statusChanged(let value):
       return .statusChanged(
         requestID: value.requestID.isEmpty ? nil : value.requestID,
         status: Self.mapStatus(value.status),
         detail: value.detail
       )
-    case let .requestCancelled(value):
+    case .requestCancelled(let value):
       try validateIdentifier(value.requestID)
       return .requestCancelled(requestID: value.requestID)
-    case let .requestFailed(value):
+    case .requestFailed(let value):
       try validateIdentifier(value.requestID)
       return .requestFailed(
         requestID: value.requestID,
@@ -202,7 +206,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
         message: value.message,
         retryable: value.retryable
       )
-    case let .resyncRequired(value):
+    case .resyncRequired(let value):
       try validateIdentifier(value.conversationID)
       return .resyncRequired(
         conversationID: value.conversationID,
@@ -222,7 +226,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     case .idle: return .idle
     case .error: return .error
     case .unspecified: return .error
-    case let .UNRECOGNIZED(rawValue): return .unknown(rawValue)
+    case .UNRECOGNIZED(let rawValue): return .unknown(rawValue)
     }
   }
 
@@ -232,12 +236,12 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
       guard sequence == 0 else {
         throw HuskyClientError.invalidEventSequence(expected: 0, actual: sequence)
       }
-    case let .messageAccepted(_, message, replayed):
+    case .messageAccepted(_, let message, let replayed):
       let expected = replayed ? 0 : message.sequence
       guard sequence == expected else {
         throw HuskyClientError.invalidEventSequence(expected: expected, actual: sequence)
       }
-    case let .messageStarted(_, message), let .messageCompleted(_, message):
+    case .messageStarted(_, let message), .messageCompleted(_, let message):
       guard sequence > 0, sequence == message.sequence else {
         throw HuskyClientError.invalidEventSequence(expected: message.sequence, actual: sequence)
       }
@@ -258,17 +262,19 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
 }
 
 enum HuskyGRPCMapper {
-  static func mapCapabilities(_ response: HuskyGetCapabilitiesResponse) throws -> HuskyCapabilities {
+  static func mapCapabilities(_ response: HuskyGetCapabilitiesResponse) throws -> HuskyCapabilities
+  {
     guard response.protocolVersion == "husky.v1" else {
       throw HuskyClientError.unsupportedProtocolVersion(response.protocolVersion)
     }
     guard response.minimumClientMajor > 0,
-          response.maximumClientMajor >= response.minimumClientMajor
+      response.maximumClientMajor >= response.minimumClientMajor
     else {
       throw HuskyClientError.invalidCapabilities("client major range is empty or non-positive")
     }
     let clientMajor: UInt32 = 1
-    guard response.minimumClientMajor <= clientMajor, clientMajor <= response.maximumClientMajor else {
+    guard response.minimumClientMajor <= clientMajor, clientMajor <= response.maximumClientMajor
+    else {
       throw HuskyClientError.incompatibleClientVersion(
         minimum: response.minimumClientMajor,
         maximum: response.maximumClientMajor,
@@ -276,19 +282,23 @@ enum HuskyGRPCMapper {
       )
     }
     guard response.maximumMessageUtf8Bytes > 0,
-          response.maximumMessageUtf8Bytes <= 64 * 1024
+      response.maximumMessageUtf8Bytes <= 64 * 1024
     else {
       throw HuskyClientError.invalidCapabilities("message byte limit must be between 1 and 65536")
     }
     guard response.maximumHistoryPageSize > 0,
-          response.maximumHistoryPageSize <= 100
+      response.maximumHistoryPageSize <= 100
     else {
-      throw HuskyClientError.invalidCapabilities("maximum history page size must be between 1 and 100")
+      throw HuskyClientError.invalidCapabilities(
+        "maximum history page size must be between 1 and 100")
     }
     guard response.defaultHistoryPageSize > 0,
-          response.defaultHistoryPageSize <= response.maximumHistoryPageSize
+      response.defaultHistoryPageSize <= 50,
+      response.defaultHistoryPageSize <= response.maximumHistoryPageSize
     else {
-      throw HuskyClientError.invalidCapabilities("default history page size must be positive and no greater than its maximum")
+      throw HuskyClientError.invalidCapabilities(
+        "default history page size must be between 1 and 50 and no greater than its maximum"
+      )
     }
     return HuskyCapabilities(
       protocolVersion: response.protocolVersion,
@@ -309,7 +319,9 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
   let events: AsyncThrowingStream<HuskySequencedEvent, any Error>
   private let conversationID: String
   private let maximumMessageBytes: UInt32
-  private let commandContinuation: AsyncStream<HuskyClientCommand>.Continuation
+  private let commandStream: HuskyCommandStream
+  private let eventBuffer: HuskyEventStreamBuffer
+  private let rpcTaskControl: HuskyTaskCancellation
   private let rpcTask: Task<Void, Never>
 
   init(
@@ -319,12 +331,15 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
     resumeToken: String?,
     maximumMessageBytes: UInt32
   ) {
-    let (commands, commandContinuation) = AsyncStream.makeStream(of: HuskyClientCommand.self)
+    let commandStream = HuskyCommandStream(capacity: 128)
     let eventBuffer = HuskyEventStreamBuffer(capacity: 128)
     self.events = eventBuffer.stream
     self.conversationID = conversationID
     self.maximumMessageBytes = maximumMessageBytes
-    self.commandContinuation = commandContinuation
+    self.commandStream = commandStream
+    self.eventBuffer = eventBuffer
+    let rpcTaskControl = HuskyTaskCancellation()
+    self.rpcTaskControl = rpcTaskControl
     let rpcTask = Task {
       do {
         try await backend.conversationSession { writer in
@@ -335,11 +350,12 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
           var firstCommand = HuskyClientCommand()
           firstCommand.command = .startSession(start)
           try await writer.write(firstCommand)
-          for await command in commands {
+          for await command in commandStream.stream {
             try await writer.write(command)
           }
         } onResponse: { response in
           var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
+          defer { partialMessages.removeAll() }
           for try await event in response.messages {
             do {
               let mapped = try GRPCHuskyChatClient<Transport>.mapEvent(
@@ -353,35 +369,43 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
               try HuskyMessageBodyValidator.apply(
                 mapped,
                 maximumBytes: maximumMessageBytes,
+                expectedConversationID: conversationID,
                 partialMessages: &partialMessages
               )
-              switch eventBuffer.yield(HuskySequencedEvent(sequence: event.sequence, event: mapped)) {
+              switch eventBuffer.yield(HuskySequencedEvent(sequence: event.sequence, event: mapped))
+              {
               case .buffered:
                 break
               case .overflow, .terminated:
-                commandContinuation.finish()
+                commandStream.finish()
+                eventBuffer.finish(throwing: HuskyClientError.eventBufferOverflow)
+                rpcTaskControl.cancel()
                 return
               }
               if case .resyncRequired = mapped {
-                commandContinuation.finish()
+                commandStream.finish()
+                eventBuffer.finish()
+                rpcTaskControl.cancel()
                 return
               }
             } catch {
-              commandContinuation.finish()
+              commandStream.finish()
               eventBuffer.finish(throwing: error)
+              rpcTaskControl.cancel()
               return
             }
           }
         }
         eventBuffer.finish()
       } catch {
-        commandContinuation.finish()
+        commandStream.finish()
         eventBuffer.finish(throwing: error)
       }
     }
     self.rpcTask = rpcTask
+    rpcTaskControl.install(rpcTask)
     eventBuffer.onTermination { termination in
-      commandContinuation.finish()
+      commandStream.finish()
       if case .cancelled = termination {
         rpcTask.cancel()
       }
@@ -389,7 +413,7 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
   }
 
   deinit {
-    self.commandContinuation.finish()
+    self.commandStream.finish()
     self.rpcTask.cancel()
   }
 
@@ -423,17 +447,51 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
   func end() async {
     var command = HuskyClientCommand()
     command.command = .endSession(HuskyEndSession())
-    _ = self.commandContinuation.yield(command)
-    self.commandContinuation.finish()
+    if self.commandStream.yield(command) == .overflow {
+      self.abort(error: HuskyClientError.resynchronizationRequired)
+    }
+    self.commandStream.finish()
     await self.rpcTask.value
   }
 
   private func send(_ command: HuskyClientCommand) throws {
-    switch self.commandContinuation.yield(command) {
+    switch self.commandStream.yield(command) {
     case .enqueued: return
-    case .dropped: throw HuskyClientError.resynchronizationRequired
+    case .overflow:
+      self.abort(error: HuskyClientError.resynchronizationRequired)
+      throw HuskyClientError.resynchronizationRequired
     case .terminated: throw HuskyClientError.resynchronizationRequired
     @unknown default: throw HuskyClientError.resynchronizationRequired
     }
+  }
+
+  private func abort(error: any Error) {
+    self.commandStream.finish()
+    self.eventBuffer.finish(throwing: error)
+    self.rpcTaskControl.cancel()
+  }
+}
+
+private final class HuskyTaskCancellation: @unchecked Sendable {
+  private let lock = NSLock()
+  private var task: Task<Void, Never>?
+  private var isCancelled = false
+
+  func install(_ task: Task<Void, Never>) {
+    self.lock.lock()
+    self.task = task
+    let isCancelled = self.isCancelled
+    self.lock.unlock()
+    if isCancelled {
+      task.cancel()
+    }
+  }
+
+  func cancel() {
+    self.lock.lock()
+    self.isCancelled = true
+    let task = self.task
+    self.lock.unlock()
+    task?.cancel()
   }
 }
