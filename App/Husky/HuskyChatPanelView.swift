@@ -28,7 +28,7 @@ struct HuskyChatPanelView: View {
       }
     }
     .padding(18)
-    .frame(width: 560)
+    .frame(width: HuskyPanelLayout.width, height: HuskyPanelLayout.height)
     .background(Color.clear)
     .preferredColorScheme(nil)
   }
@@ -37,10 +37,19 @@ struct HuskyChatPanelView: View {
     HStack(spacing: 8) {
       Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
         .font(.caption2.weight(.semibold))
-        .foregroundStyle(.secondary)
-        .frame(width: 28, height: 32)
+        .foregroundStyle(Color.primary)
+        .frame(width: 36, height: 36)
         .contentShape(Rectangle())
         .gesture(WindowDragGesture())
+        .allowsWindowActivationEvents()
+        .background {
+          RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .fill(Color.primary.opacity(0.09))
+            .overlay {
+              RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+            }
+        }
         .accessibilityElement()
         .accessibilityLabel("Move chat window")
         .accessibilityHint("Drag to reposition the chat window")
@@ -50,6 +59,7 @@ struct HuskyChatPanelView: View {
         .font(.headline)
         .accessibilityAddTraits(.isHeader)
         .gesture(WindowDragGesture())
+        .allowsWindowActivationEvents()
 
       if isDemo {
         Text("DEMO FIXTURE")
@@ -107,13 +117,13 @@ struct HuskyChatPanelView: View {
     GeometryReader { viewport in
       ScrollViewReader { scrollProxy in
         ScrollView(.vertical) {
-          LazyVStack(alignment: .leading, spacing: 18) {
+          LazyVStack(alignment: .leading, spacing: 18 * HuskyPanelLayout.sizeScale) {
             if model.messages.isEmpty {
               Text("Messages from your backend will appear here.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 24)
+                .padding(.vertical, 24 * HuskyPanelLayout.sizeScale)
             } else {
               ForEach(model.messages) { message in
                 HuskyMessageBubble(
@@ -141,7 +151,11 @@ struct HuskyChatPanelView: View {
         }
         .coordinateSpace(name: "HuskyTranscript")
         .scrollIndicators(.hidden)
-        .frame(height: min(510, max(220, viewport.size.height)))
+        .frame(
+          height: min(
+            HuskyPanelLayout.transcriptMaximumHeight,
+            max(HuskyPanelLayout.transcriptMinimumHeight, viewport.size.height))
+        )
         .mask {
           if showsFullHistory {
             Rectangle()
@@ -184,7 +198,7 @@ struct HuskyChatPanelView: View {
         .accessibilityLabel("Conversation history")
       }
     }
-    .frame(maxHeight: 510)
+    .frame(maxHeight: HuskyPanelLayout.transcriptMaximumHeight)
   }
 
   private var composer: some View {
@@ -213,17 +227,20 @@ struct HuskyChatPanelView: View {
     .padding(.horizontal, 14)
     .padding(.vertical, 9)
     .background {
-      HuskyMaterialSurface(candidate: materialCandidate, cornerRadius: 26)
-        .overlay {
-          RoundedRectangle(cornerRadius: 26, style: .continuous)
-            .fill(customTint.opacity(materialCandidate == .customTint ? 0.68 : 0.13))
-        }
-        .overlay {
-          RoundedRectangle(cornerRadius: 26, style: .continuous)
-            .strokeBorder(Color.primary.opacity(0.13), lineWidth: 1)
-        }
+      HuskyMaterialSurface(
+        candidate: materialCandidate, cornerRadius: HuskyPanelLayout.messageCornerRadius
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: HuskyPanelLayout.messageCornerRadius, style: .continuous)
+          .fill(customTint.opacity(materialCandidate == .customTint ? 0.68 : 0.13))
+      }
+      .overlay {
+        RoundedRectangle(cornerRadius: HuskyPanelLayout.messageCornerRadius, style: .continuous)
+          .strokeBorder(Color.primary.opacity(0.13), lineWidth: 1)
+      }
     }
-    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+    .clipShape(
+      RoundedRectangle(cornerRadius: HuskyPanelLayout.messageCornerRadius, style: .continuous))
   }
 
   private var customTint: Color {
@@ -256,23 +273,27 @@ private struct HuskyMessageBubble: View {
         .font(.system(size: fontSize))
         .foregroundStyle(.primary)
         .textSelection(.enabled)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-        .frame(maxWidth: 560 * 0.87, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: HuskyPanelLayout.messageMaximumWidth, alignment: .leading)
         .background {
-          HuskyMaterialSurface(candidate: materialCandidate, cornerRadius: 26)
-            .overlay {
-              RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(
-                  Color(nsColor: .controlBackgroundColor).opacity(
-                    materialCandidate == .customTint ? 0.68 : 0.13))
-            }
-            .overlay {
-              RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
-            }
+          HuskyMaterialSurface(
+            candidate: materialCandidate, cornerRadius: HuskyPanelLayout.messageCornerRadius
+          )
+          .overlay {
+            RoundedRectangle(cornerRadius: HuskyPanelLayout.messageCornerRadius, style: .continuous)
+              .fill(
+                Color(nsColor: .controlBackgroundColor).opacity(
+                  materialCandidate == .customTint ? 0.68 : 0.13))
+          }
+          .overlay {
+            RoundedRectangle(cornerRadius: HuskyPanelLayout.messageCornerRadius, style: .continuous)
+              .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+          }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .clipShape(
+          RoundedRectangle(cornerRadius: HuskyPanelLayout.messageCornerRadius, style: .continuous)
+        )
         .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(message.role == .user ? "You" : "Backend"): \(message.text)")
@@ -293,7 +314,7 @@ private struct HuskyTranscriptHeightKey: PreferenceKey {
 #Preview("Static appearance sample — no backend") {
   let previewClient = HuskyPreviewChatClient()
   HuskyChatPanelView(model: HuskyChatPanelModel(client: previewClient), isDemo: true)
-    .frame(height: 660)
+    .frame(width: HuskyPanelLayout.width, height: HuskyPanelLayout.height)
 }
 
 @MainActor

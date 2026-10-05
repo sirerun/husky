@@ -46,7 +46,7 @@ final class HuskyFloatingPanelController {
 
     if panel.setFrameUsingName(Self.frameAutosaveName, force: false) {
       if let restoration = HuskyPanelGeometry.restore(
-        savedFrame: panel.frame,
+        savedFrame: HuskyPanelGeometry.resizeLegacyDefaultFrame(panel.frame),
         screens: usableAreas,
         activeScreenIndex: usableActiveScreenIndex
       ) {
