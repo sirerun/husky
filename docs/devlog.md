@@ -67,7 +67,7 @@ Independent review of the first planning candidate identified unnecessary machin
 The user confirmed the supplied glass-chat-2 dist as the floating-chat reference, with a frameless transparent window defaulting to bottom left. This supersedes the earlier bottom-right wording. Preserved native implementation, saved-position restoration, and all historical task IDs/status. Split fixture and build scaffolding into T1.8/T1.9, gated independent lanes on a shared contract freeze, and extended integration/review coverage. Later outline expansions must separate independent client, updater and acceptance work while retaining publication/install gates. Planning-only changes; no application build, native visual acceptance, release or installation occurred. Exact review and landing evidence belongs to the planning PR.
 # 2026-10-05 — Sizing and diagnostic-bound follow-up
 
-- Source candidate: `1888e93` (coordinator branch).
+- Source candidate: `0cb771d` (coordinator branch).
 - Scaled the original default panel from 560×680 to 448×544 points. Legacy saved frames measuring 560×660 or 560×680 are scaled individually; other saved frame dimensions pass through unchanged.
 - Bubble maximum width, horizontal/vertical padding, and corner radius use the same 0.8 scale. Message font sizes and interaction target dimensions remain unchanged for legibility and accessibility.
 - Added bounded diagnostic event text/resume-token handling with focused UTF-8 limit coverage in HuskyCore. The independent worker passed strict formatting and diff checks; integrated tests have not yet run.
