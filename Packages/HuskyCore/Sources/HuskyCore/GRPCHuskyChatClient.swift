@@ -40,7 +40,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     let response = try await self.backend.listConversations(
       request, options: HuskyGRPCMapper.unaryCallOptions)
     return HuskyConversationPage(
-      conversations: try response.conversations.map(Self.mapConversation),
+      conversations: try response.conversations.map(HuskyGRPCMapper.mapConversation),
       nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor,
       hasMore: response.hasMore_p
     )
@@ -48,13 +48,13 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
 
   public func createConversation(requestID: String, title: String) async throws -> HuskyConversation
   {
-    try Self.validateIdentifier(requestID)
+    try HuskyGRPCMapper.validateIdentifier(requestID)
     var request = HuskyCreateConversationRequest()
     request.clientRequestID = requestID
     request.title = title
     let response = try await self.backend.createConversation(
       request, options: HuskyGRPCMapper.unaryCallOptions)
-    return try Self.mapConversation(response.conversation)
+    return try HuskyGRPCMapper.mapConversation(response.conversation)
   }
 
   public func getHistory(
@@ -62,7 +62,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     pageSize: UInt32,
     before cursor: String?
   ) async throws -> HuskyHistoryPage {
-    try Self.validateIdentifier(conversationID)
+    try HuskyGRPCMapper.validateIdentifier(conversationID)
     let capabilities = try await self.getCapabilities()
     try Self.validatePageSize(pageSize, maximum: capabilities.maximumHistoryPageSize)
     var request = HuskyGetHistoryRequest()
@@ -72,7 +72,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     let response = try await self.backend.getHistory(
       request, options: HuskyGRPCMapper.unaryCallOptions)
     let messages = try response.messages.map { message in
-      try Self.mapMessage(
+      try HuskyGRPCMapper.mapMessage(
         message,
         expectedConversationID: conversationID,
         maximumMessageBytes: capabilities.maximumMessageUTF8Bytes
@@ -92,7 +92,8 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     afterSequence: UInt64,
     resumeToken: String?
   ) async throws -> any HuskyConversationSession {
-    try Self.validateIdentifier(conversationID)
+    try HuskyGRPCMapper.validateIdentifier(conversationID)
+    try HuskyGRPCMapper.validateDiagnostic(resumeToken ?? "", field: "resume token")
     let capabilities = try await self.getCapabilities()
     return GRPCHuskyConversationSession(
       backend: self.backend,
@@ -103,13 +104,42 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     )
   }
 
-  static func validateIdentifier(_ identifier: String) throws {
-    guard !identifier.isEmpty else { throw HuskyClientError.invalidIdentifier }
-  }
-
   static func validatePageSize(_ pageSize: UInt32, maximum: UInt32) throws {
     guard pageSize == 0 || pageSize <= maximum else {
       throw HuskyClientError.invalidPageSize(requested: pageSize, maximum: maximum)
+    }
+  }
+
+}
+
+enum HuskyGRPCMapper {
+  static let maximumIdentifierBytes = 256
+  static let maximumDiagnosticBytes = 4096
+
+  static func validateIdentifier(_ identifier: String) throws {
+    guard !identifier.isEmpty else { throw HuskyClientError.invalidIdentifier }
+    try validateUTF8ByteLimit(
+      identifier, maximumBytes: maximumIdentifierBytes, field: "identifier")
+  }
+
+  private static func validateOptionalIdentifier(_ identifier: String) throws {
+    guard !identifier.isEmpty else { return }
+    try validateIdentifier(identifier)
+  }
+
+  static func validateDiagnostic(_ value: String, field: String) throws {
+    try validateUTF8ByteLimit(value, maximumBytes: maximumDiagnosticBytes, field: field)
+  }
+
+  private static func validateUTF8ByteLimit(
+    _ value: String,
+    maximumBytes: Int,
+    field: String
+  ) throws {
+    let actualBytes = value.utf8.count
+    guard actualBytes <= maximumBytes else {
+      throw HuskyClientError.malformedResponse(
+        "\(field) exceeds the maximum of \(maximumBytes) UTF-8 bytes (got \(actualBytes))")
     }
   }
 
@@ -133,6 +163,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
   ) throws -> HuskyMessage {
     try validateIdentifier(message.messageID)
     try validateIdentifier(message.conversationID)
+    try validateOptionalIdentifier(message.requestID)
     if let expectedConversationID, message.conversationID != expectedConversationID {
       throw HuskyClientError.unexpectedConversation(
         expected: expectedConversationID,
@@ -166,6 +197,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     switch event.event {
     case .sessionReady(let value):
       try validateIdentifier(value.conversationID)
+      try validateDiagnostic(value.resumeToken, field: "resume token")
       return .sessionReady(
         conversationID: value.conversationID,
         caughtUpThrough: value.caughtUpThroughSequence,
@@ -179,12 +211,14 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
         replayed: value.replayedIdempotentResult
       )
     case .messageStarted(let value):
+      try validateOptionalIdentifier(value.requestID)
       return .messageStarted(
         requestID: value.requestID.isEmpty ? nil : value.requestID,
         message: try mapMessage(value.message, maximumMessageBytes: maximumMessageBytes)
       )
     case .textDelta(let value):
       try validateIdentifier(value.messageID)
+      try validateOptionalIdentifier(value.requestID)
       if value.hasReplaceText {
         try HuskyMessageBodyValidator.validate(value.replaceText, maximumBytes: maximumMessageBytes)
       } else {
@@ -198,11 +232,14 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
         replace: value.hasReplaceText ? value.replaceText : nil
       )
     case .messageCompleted(let value):
+      try validateOptionalIdentifier(value.requestID)
       return .messageCompleted(
         requestID: value.requestID.isEmpty ? nil : value.requestID,
         message: try mapMessage(value.message, maximumMessageBytes: maximumMessageBytes)
       )
     case .statusChanged(let value):
+      try validateOptionalIdentifier(value.requestID)
+      try validateDiagnostic(value.detail, field: "status detail")
       return .statusChanged(
         requestID: value.requestID.isEmpty ? nil : value.requestID,
         status: Self.mapStatus(value.status),
@@ -213,6 +250,9 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
       return .requestCancelled(requestID: value.requestID)
     case .requestFailed(let value):
       try validateIdentifier(value.requestID)
+      try validateUTF8ByteLimit(
+        value.publicCode, maximumBytes: maximumIdentifierBytes, field: "public code")
+      try validateDiagnostic(value.message, field: "failure message")
       return .requestFailed(
         requestID: value.requestID,
         publicCode: value.publicCode,
@@ -221,6 +261,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
       )
     case .resyncRequired(let value):
       try validateIdentifier(value.conversationID)
+      try validateDiagnostic(value.reason, field: "resync reason")
       return .resyncRequired(
         conversationID: value.conversationID,
         oldestAvailableSequence: value.oldestAvailableSequence,
@@ -243,12 +284,10 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     }
   }
 
-  private static func date(seconds: Int64, nanos: Int32) -> Date {
+  static func date(seconds: Int64, nanos: Int32) -> Date {
     Date(timeIntervalSince1970: TimeInterval(seconds) + TimeInterval(nanos) / 1_000_000_000)
   }
-}
 
-enum HuskyGRPCMapper {
   /// Shared deadline for every unary capability, conversation, and history RPC.
   static var unaryCallOptions: CallOptions {
     var options = CallOptions.defaults
@@ -389,7 +428,7 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
           defer { partialMessages.removeAll() }
           for try await event in response.messages {
             do {
-              let mapped = try GRPCHuskyChatClient<Transport>.mapEvent(
+              let mapped = try HuskyGRPCMapper.mapEvent(
                 event,
                 maximumMessageBytes: maximumMessageBytes
               )

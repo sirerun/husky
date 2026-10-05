@@ -8,6 +8,11 @@ import "google/protobuf/timestamp.proto";
 
 // Husky is a typed chat client. Audio capture, transcription, and tool
 // execution are outside this protocol.
+// All fields whose names end in _id are limited to 256 UTF-8 bytes.
+// Required IDs are non-empty; request_id may be empty only for unsolicited backend messages.
+// Resume tokens are limited to 4096 UTF-8 bytes. Status detail, failure message, and resync reason
+// are each limited to 4096 UTF-8 bytes; public_code is limited to 256 UTF-8 bytes. Limits include
+// the exact maximum and count UTF-8 bytes rather than Unicode characters.
 service HuskyBackend {
   rpc GetCapabilities(GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
   rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
@@ -177,7 +182,7 @@ enum BackendStatus {
 message StatusChanged {
   string request_id = 1;
   BackendStatus status = 2;
-  string detail = 3;
+  string detail = 3; // At most 4096 UTF-8 bytes.
 }
 
 message RequestCancelled {
@@ -188,13 +193,13 @@ message RequestCancelled {
 
 message RequestFailed {
   string request_id = 1;
-  string public_code = 2;
-  string message = 3;
+  string public_code = 2; // At most 256 UTF-8 bytes.
+  string message = 3; // At most 4096 UTF-8 bytes.
   bool retryable = 4;
 }
 
 message ResyncRequired {
   string conversation_id = 1;
   uint64 oldest_available_sequence = 2;
-  string reason = 3;
+  string reason = 3; // At most 4096 UTF-8 bytes.
 }
