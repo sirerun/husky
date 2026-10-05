@@ -2,6 +2,17 @@ import Foundation
 import GRPCCore
 import HuskyProtocol
 
+enum HuskyHistoryValidator {
+  static func validate(_ messages: [HuskyMessage], snapshotSequence: UInt64) throws {
+    guard messages.allSatisfy({ $0.sequence > 0 && $0.sequence <= snapshotSequence }) else {
+      throw HuskyClientError.malformedResponse("history message sequence is outside its snapshot")
+    }
+    guard zip(messages, messages.dropFirst()).allSatisfy({ $0.0.sequence < $0.1.sequence }) else {
+      throw HuskyClientError.historyNotOrdered
+    }
+  }
+}
+
 /// Adapter from the generated gRPC Swift 2 client to Husky's app-facing API.
 /// The caller owns the transport, so TLS, local-fixture plaintext selection,
 /// connection metadata, and credential storage stay at the profile boundary.
@@ -67,9 +78,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
         maximumMessageBytes: capabilities.maximumMessageUTF8Bytes
       )
     }
-    guard zip(messages, messages.dropFirst()).allSatisfy({ $0.0.sequence < $0.1.sequence }) else {
-      throw HuskyClientError.historyNotOrdered
-    }
+    try HuskyHistoryValidator.validate(messages, snapshotSequence: response.snapshotSequence)
     return HuskyHistoryPage(
       messages: messages,
       nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor,
