@@ -34,6 +34,57 @@ final class HuskyLimitTests: XCTestCase {
     XCTAssertThrowsError(try HuskyGRPCMapper.mapCapabilities(capabilities))
   }
 
+  func testEventIdentifiersEnforceTheLimitAcrossConversationMessageAndRequestIDs() throws {
+    let maximumIdentifier = String(repeating: "é", count: 128)
+    let oversizedIdentifier = maximumIdentifier + "é"
+
+    XCTAssertNoThrow(try mapSessionReady(conversationID: maximumIdentifier, resumeToken: ""))
+    XCTAssertThrowsError(try mapSessionReady(conversationID: oversizedIdentifier, resumeToken: ""))
+
+    XCTAssertNoThrow(
+      try mapMessageStarted(
+        conversationID: "conversation", messageID: maximumIdentifier,
+        requestID: maximumIdentifier))
+    XCTAssertThrowsError(
+      try mapMessageStarted(
+        conversationID: "conversation", messageID: oversizedIdentifier, requestID: "request"))
+    XCTAssertThrowsError(
+      try mapMessageStarted(
+        conversationID: oversizedIdentifier, messageID: "message", requestID: "request"))
+    XCTAssertThrowsError(
+      try mapMessageStarted(
+        conversationID: "conversation", messageID: "message", requestID: oversizedIdentifier))
+  }
+
+  func testDiagnosticAndResumeTokenLimitsUseUTF8BytesAndAllowTheExactBoundary() throws {
+    let maximumDiagnostic = String(repeating: "é", count: 2048)
+    let oversizedDiagnostic = maximumDiagnostic + "é"
+    XCTAssertEqual(maximumDiagnostic.utf8.count, 4096)
+
+    XCTAssertNoThrow(try mapStatus(detail: maximumDiagnostic))
+    XCTAssertThrowsError(try mapStatus(detail: oversizedDiagnostic))
+
+    XCTAssertNoThrow(try mapRequestFailure(publicCode: "FAILED", message: maximumDiagnostic))
+    XCTAssertThrowsError(try mapRequestFailure(publicCode: "FAILED", message: oversizedDiagnostic))
+
+    XCTAssertNoThrow(try mapResync(reason: maximumDiagnostic))
+    XCTAssertThrowsError(try mapResync(reason: oversizedDiagnostic))
+
+    XCTAssertNoThrow(
+      try mapSessionReady(conversationID: "conversation", resumeToken: maximumDiagnostic))
+    XCTAssertThrowsError(
+      try mapSessionReady(conversationID: "conversation", resumeToken: oversizedDiagnostic))
+  }
+
+  func testPublicCodeLimitUsesUTF8BytesAndAllowsTheExactBoundary() throws {
+    let maximumCode = String(repeating: "é", count: 128)
+    let oversizedCode = maximumCode + "é"
+    XCTAssertEqual(maximumCode.utf8.count, 256)
+
+    XCTAssertNoThrow(try mapRequestFailure(publicCode: maximumCode, message: "failed"))
+    XCTAssertThrowsError(try mapRequestFailure(publicCode: oversizedCode, message: "failed"))
+  }
+
   func testHistoryValidationRejectsZeroSequence() {
     let messages = [historyMessage(sequence: 0)]
 
@@ -465,5 +516,72 @@ final class HuskyLimitTests: XCTestCase {
     response.defaultHistoryPageSize = 20
     response.maximumHistoryPageSize = 50
     return response
+  }
+
+  private func mapStatus(detail: String) throws -> HuskyChatEvent {
+    let event = HuskyBackendEvent.with {
+      $0.statusChanged = .with {
+        $0.requestID = "request"
+        $0.status = .thinking
+        $0.detail = detail
+      }
+    }
+    return try HuskyGRPCMapper.mapEvent(event, maximumMessageBytes: 4096)
+  }
+
+  private func mapRequestFailure(publicCode: String, message: String) throws -> HuskyChatEvent {
+    let event = HuskyBackendEvent.with {
+      $0.requestFailed = .with {
+        $0.requestID = "request"
+        $0.publicCode = publicCode
+        $0.message = message
+        $0.retryable = false
+      }
+    }
+    return try HuskyGRPCMapper.mapEvent(event, maximumMessageBytes: 4096)
+  }
+
+  private func mapResync(reason: String) throws -> HuskyChatEvent {
+    let event = HuskyBackendEvent.with {
+      $0.resyncRequired = .with {
+        $0.conversationID = "conversation"
+        $0.oldestAvailableSequence = 1
+        $0.reason = reason
+      }
+    }
+    return try HuskyGRPCMapper.mapEvent(event, maximumMessageBytes: 4096)
+  }
+
+  private func mapSessionReady(conversationID: String, resumeToken: String) throws
+    -> HuskyChatEvent
+  {
+    let event = HuskyBackendEvent.with {
+      $0.sessionReady = .with {
+        $0.conversationID = conversationID
+        $0.resumeToken = resumeToken
+      }
+    }
+    return try HuskyGRPCMapper.mapEvent(event, maximumMessageBytes: 4096)
+  }
+
+  private func mapMessageStarted(conversationID: String, messageID: String, requestID: String)
+    throws
+    -> HuskyChatEvent
+  {
+    let message = HuskyChatMessage.with {
+      $0.messageID = messageID
+      $0.conversationID = conversationID
+      $0.role = .assistant
+      $0.text = "reply"
+      $0.requestID = requestID
+      $0.sequence = 1
+    }
+    let event = HuskyBackendEvent.with {
+      $0.messageStarted = .with {
+        $0.requestID = requestID
+        $0.message = message
+      }
+    }
+    return try HuskyGRPCMapper.mapEvent(event, maximumMessageBytes: 4096)
   }
 }
