@@ -29,7 +29,7 @@ enum HuskyFixtureServer {
   }
 
   private static func port(from arguments: [String]) throws -> Int {
-    guard let index = arguments.firstIndex(of: "--port") else { return 0 }
+    guard let index = arguments.firstIndex(of: "--port") else { return 50_051 }
     guard arguments.indices.contains(index + 1), let port = Int(arguments[index + 1]),
       (0...65_535).contains(port)
     else {

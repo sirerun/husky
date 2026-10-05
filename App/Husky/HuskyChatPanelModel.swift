@@ -10,6 +10,7 @@ final class HuskyChatPanelModel {
 
   private let client: any HuskyChatPanelClient
   @ObservationIgnored private var updatesTask: Task<Void, Never>?
+  @ObservationIgnored private var statusTask: Task<Void, Never>?
 
   init(client: any HuskyChatPanelClient) {
     self.client = client
@@ -19,11 +20,18 @@ final class HuskyChatPanelModel {
         self.messages = messages
       }
     }
+    statusTask = Task { [weak self, client] in
+      for await status in client.statusUpdates() {
+        guard let self else { return }
+        self.statusText = status
+      }
+    }
   }
 
   deinit {
     MainActor.assumeIsolated {
       updatesTask?.cancel()
+      statusTask?.cancel()
     }
   }
 
