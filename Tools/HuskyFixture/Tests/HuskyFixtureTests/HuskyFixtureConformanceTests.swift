@@ -5,7 +5,7 @@ import HuskyFixture
 import HuskyProtocol
 import XCTest
 
-final class HuskyFixtureConformanceTests: XCTestCase, Sendable {
+final class HuskyFixtureConformanceTests: XCTestCase, @unchecked Sendable {
   func testCapabilitiesAndCursorPaginationUseFrozenLimitsAndStablePages() async throws {
     try await withFixture { backend in
       let capabilities = try await backend.getCapabilities(.init())
