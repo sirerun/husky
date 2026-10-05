@@ -1,5 +1,15 @@
 # Husky devlog
 
+## 2026-10-05 — T1 foundation source integrated; executable gates still open
+
+The foundation candidate `33f53dd08a0ba1cdcedd262f08e6b3975d590163` integrates the AppKit/SwiftUI panel, versioned `husky.v1` bindings, bounded typed gRPC client, deterministic fixture server/tests, SwiftPM target graph, pinned `Package.resolved`, and macOS CI workflow. `--fixture-mode --fixture-port 50051` explicitly connects the native panel to the local fixture at `127.0.0.1`; default launch remains unconfigured. The fixture is labeled and is not a production backend.
+
+An independent Luna source review passed this exact head after resolving findings on message/event scope, bounded streams and deadlines, cursor sequence validation, partial-message lifecycle, and fixture reconnect/history resynchronization. Strict `swift-format lint --strict`, `git diff --check`, and `swift package dump-package` passed locally at this candidate. These checks are static evidence only.
+
+Build evidence is older than this candidate: `swift build --cache-path .build/package-cache --scratch-path .build/build` passed at coordinator commit `b4be4d735420c08f7ad68dbd1a957237b70859c9`, before the final T1.2 hardening and T1.7 adapter. A later `swift test` attempt at `4c90ea43ae844938fc6b345c57a5a72613c4f483` stopped during Swift 6 fixture-test compilation (`hasMore_p` generated-field naming and XCTestCase sendability); the source was corrected, but the suite has not been rerun. No build or test pass is claimed for `33f53dd`, and no CI, TCP listener, native UI, visual-fidelity, release, install, or updater acceptance is established.
+
+Keep T1.1, T1.2, T1.8, T1.9, T1.7, T1.3–T1.6 open until the integrated candidate builds and tests, the real loopback fixture streams through the app, native reference/placement checks pass, CI and exact-head review are current, and the reviewed PR is landed and verified. The tracked `Package.resolved` is present; this supersedes earlier scaffolding notes that resolution was still pending.
+
 ## 2026-10-04 — bootstrap correction landed; foundation contract frozen
 
 PR #3 passed renewed independent exact-head review at base `30b1e5a27e105856edc8cdd99b068a2cb428eaa8` / head `e65af86b13e5f1f04fb478b9eb258b593c848b21` and was rebase-merged by GitHub at `91b831bd8dd8b16d3a7434fec38a80370c137dc1`. Landed verification confirmed NOTICE and AGENTS.md are present, tracked public planning files contain no scratch locator or private local path, and LICENSE retains blob `d645695673349e3947e8e5ae42332d0ac3164cd7`.

@@ -1,6 +1,6 @@
 # Husky — native chat, signed releases, local installation, and automatic updates
 
-Change summary (2026-10-04): refined maximum safe parallel lanes and confirmed frameless, transparent, bottom-left floating chat from the glass-chat-2 dist reference. Planning artifacts only; no application, release, installation, or updater has been implemented or verified.
+Change summary (2026-10-05): the foundation source now includes the native panel, typed gRPC client, deterministic fixture, package/CI scaffold, and an opt-in loopback fixture connection. Exact-head static review passed at `33f53dd08a0ba1cdcedd262f08e6b3975d590163`; formatter and package-manifest checks pass. A build passed on an earlier candidate, but no build or full test suite has passed on the current source. Native visual acceptance, CI, release, installation, and updater remain unverified; keep T1 implementation and dependent gates open.
 
 ## 1. Context
 
