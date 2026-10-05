@@ -304,7 +304,7 @@ final class HuskyFixtureConformanceTests: XCTestCase {
 
   private func withFixture(
     configuration: HuskyFixtureConfiguration = .init(),
-    operation: (Husky_V1_HuskyBackend.Client<InProcessTransport.Client>) async throws -> Void
+    operation: (HuskyHuskyBackend.Client<InProcessTransport.Client>) async throws -> Void
   ) async throws {
     let transport = InProcessTransport()
     let service = HuskyFixtureService(store: HuskyFixtureStore(configuration: configuration))
@@ -313,13 +313,13 @@ final class HuskyFixtureConformanceTests: XCTestCase {
     defer { serverTask.cancel() }
 
     try await withGRPCClient(transport: transport.client) { client in
-      try await operation(Husky_V1_HuskyBackend.Client(wrapping: client))
+      try await operation(HuskyHuskyBackend.Client(wrapping: client))
     }
   }
 
   private func createConversation(
     _ requestID: String,
-    using backend: Husky_V1_HuskyBackend.Client<InProcessTransport.Client>
+    using backend: HuskyHuskyBackend.Client<InProcessTransport.Client>
   ) async throws -> String {
     let response = try await backend.createConversation(
       .with {
@@ -332,7 +332,7 @@ final class HuskyFixtureConformanceTests: XCTestCase {
   private func waitForAssistantMessages(
     _ expectedCount: Int,
     conversationID: String,
-    using backend: Husky_V1_HuskyBackend.Client<InProcessTransport.Client>
+    using backend: HuskyHuskyBackend.Client<InProcessTransport.Client>
   ) async throws {
     for _ in 0..<500 {
       let history = try await backend.getHistory(

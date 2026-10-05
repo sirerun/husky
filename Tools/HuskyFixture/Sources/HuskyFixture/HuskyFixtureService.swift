@@ -3,7 +3,7 @@ import GRPCCore
 import HuskyProtocol
 
 /// Implements the frozen husky.v1 API with an in-memory deterministic script.
-public struct HuskyFixtureService: Husky_V1_HuskyBackend.SimpleServiceProtocol {
+public struct HuskyFixtureService: HuskyHuskyBackend.SimpleServiceProtocol {
   private let store: HuskyFixtureStore
 
   public init(store: HuskyFixtureStore = .init()) {

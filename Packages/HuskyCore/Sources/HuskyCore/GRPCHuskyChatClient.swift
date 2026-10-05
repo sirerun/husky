@@ -6,9 +6,9 @@ import HuskyProtocol
 /// The caller owns the transport, so TLS, local-fixture plaintext selection,
 /// connection metadata, and credential storage stay at the profile boundary.
 public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
-  private let backend: Husky_V1_HuskyBackend.Client<Transport>
+  private let backend: HuskyHuskyBackend.Client<Transport>
 
-  public init(backend: Husky_V1_HuskyBackend.Client<Transport>) {
+  public init(backend: HuskyHuskyBackend.Client<Transport>) {
     self.backend = backend
   }
 
@@ -313,7 +313,7 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
   private let rpcTask: Task<Void, Never>
 
   init(
-    backend: Husky_V1_HuskyBackend.Client<Transport>,
+    backend: HuskyHuskyBackend.Client<Transport>,
     conversationID: String,
     afterSequence: UInt64,
     resumeToken: String?,
