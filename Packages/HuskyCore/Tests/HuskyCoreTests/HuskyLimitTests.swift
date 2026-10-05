@@ -363,6 +363,34 @@ final class HuskyLimitTests: XCTestCase {
     }
   }
 
+  func testMessageStartedRequiresEnvelopeSequenceToMatchNestedMessage() {
+    let started = HuskyChatEvent.messageStarted(
+      requestID: "r-1",
+      message: HuskyMessage(
+        id: "m-1", conversationID: "c-1", role: .assistant, text: "hello",
+        createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 9
+      )
+    )
+
+    XCTAssertThrowsError(try HuskyGRPCMapper.validateEventSequence(10, for: started)) { error in
+      XCTAssertEqual(error as? HuskyClientError, .invalidEventSequence(expected: 9, actual: 10))
+    }
+  }
+
+  func testMessageCompletedRequiresEnvelopeSequenceToMatchNestedMessage() {
+    let completed = HuskyChatEvent.messageCompleted(
+      requestID: "r-1",
+      message: HuskyMessage(
+        id: "m-1", conversationID: "c-1", role: .assistant, text: "hello",
+        createdAt: Date(timeIntervalSince1970: 0), requestID: "r-1", sequence: 9
+      )
+    )
+
+    XCTAssertThrowsError(try HuskyGRPCMapper.validateEventSequence(10, for: completed)) { error in
+      XCTAssertEqual(error as? HuskyClientError, .invalidEventSequence(expected: 9, actual: 10))
+    }
+  }
+
   func testUnaryRPCDeadlineIsBoundedAndShared() {
     XCTAssertEqual(HuskyGRPCMapper.unaryCallOptions.timeout, .seconds(15))
   }
