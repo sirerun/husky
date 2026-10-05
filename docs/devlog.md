@@ -1,5 +1,11 @@
 # Husky devlog
 
+## 2026-10-04 — T0.3 bootstrap review remediation
+
+Independent exact-head review of the initial bootstrap change (base `504b574b2ead1718fb2aa64fb969b75ab15d1479`, head `7dc577542570b941d6aaf9f647af1f2596c685b0`) returned BLOCK with three findings: missing repository contributor instructions, an ignored private scratch-path locator in the public plan, and no copyright notice. The reviewer verified that the checked-in Apache LICENSE exactly matched the official text. Remediation adds concise repository instructions and a separate NOTICE naming `Sire Run, Inc.`; LICENSE remains unchanged, and the scratch locator is removed. T0.8 is the required independent exact-head re-review before merge.
+
+T0.7 verification: the delivery-plan parser resolved 24 unique tasks and all dependency references; public-file hygiene search found no scratch locator or private local-path disclosure; all planning-document relative Markdown links resolve; `git diff --check` passes; the repository's Apache LICENSE has no diff; GitHub metadata identifies the repository as public with Apache-2.0 licensing. The new NOTICE contains the supplied holder name. No source implementation was added. These are local verification results, not CI or release evidence.
+
 ## 2026-10-03 — initial discovery and delivery planning
 
 Confirmed the product boundary, multiple profile/conversation behavior, backend-owned history, common gRPC integration, and independent audio-service boundary through user clarification. The user then requested a plan covering build, public Apache-licensed release, local installation, and automatic self-updates.
