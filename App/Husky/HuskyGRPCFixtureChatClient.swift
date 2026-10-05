@@ -54,11 +54,11 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
     try await session.submit(requestID: UUID().uuidString, text: text)
   }
 
-  func shutdown() {
-    self.connectionTask?.cancel()
+  func shutdown() async {
     if let session = self.session {
-      Task { await session.end() }
+      await session.end()
     }
+    self.connectionTask?.cancel()
     self.messagesContinuation?.finish()
     self.statusContinuation?.finish()
   }
@@ -82,17 +82,31 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
           let backend = HuskyHuskyBackend.Client(wrapping: grpcClient)
           let api = GRPCHuskyChatClient(backend: backend)
           let capabilities = try await api.getCapabilities()
-          let page = try await api.listConversations(
+          let firstPage = try await api.listConversations(
             pageSize: capabilities.defaultHistoryPageSize,
             before: nil
           )
+          let rememberedID = self.conversationID
+          var rememberedConversation: HuskyConversation?
+          if let rememberedID {
+            rememberedConversation = firstPage.conversations.first { $0.id == rememberedID }
+            var nextCursor = firstPage.nextCursor
+            var hasMore = firstPage.hasMore
+            while rememberedConversation == nil, hasMore, let cursor = nextCursor {
+              let page = try await api.listConversations(
+                pageSize: capabilities.defaultHistoryPageSize,
+                before: cursor
+              )
+              rememberedConversation = page.conversations.first { $0.id == rememberedID }
+              nextCursor = page.nextCursor
+              hasMore = page.hasMore
+            }
+          }
           let conversation: HuskyConversation
-          if let conversationID = self.conversationID,
-            let existing = page.conversations.first(where: { $0.id == conversationID })
-          {
-            conversation = existing
-          } else if let existing = page.conversations.first {
-            conversation = existing
+          if let rememberedConversation {
+            conversation = rememberedConversation
+          } else if let first = firstPage.conversations.first {
+            conversation = first
           } else {
             conversation = try await api.createConversation(
               requestID: UUID().uuidString,

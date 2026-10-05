@@ -19,5 +19,5 @@ protocol HuskyChatPanelClient: AnyObject {
   func messageUpdates() -> AsyncStream<[HuskyPanelMessage]>
   func statusUpdates() -> AsyncStream<String?>
   func submit(_ text: String) async throws
-  func shutdown()
+  func shutdown() async
 }
