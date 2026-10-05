@@ -318,10 +318,14 @@ enum HuskyGRPCMapper {
       guard sequence > 0, sequence == message.sequence else {
         throw HuskyClientError.invalidEventSequence(expected: message.sequence, actual: sequence)
       }
-    case .textDelta, .statusChanged, .requestCancelled:
+    case .textDelta, .statusChanged:
       guard sequence > 0 else {
         throw HuskyClientError.invalidEventSequence(expected: 1, actual: sequence)
       }
+    case .requestCancelled:
+      // A cancellation after completion is an idempotent, cursor-neutral no-op acknowledgement.
+      // A cancellation that changes state carries its normal positive event sequence.
+      break
     case .requestFailed:
       // A failed-command reply uses zero. An asynchronous request failure may
       // be an ordinary sequenced conversation event.
