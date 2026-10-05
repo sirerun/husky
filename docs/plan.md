@@ -13,7 +13,7 @@ Success means: the reference appearance passes native visual comparison; real gR
 ## 2. Discovery summary
 
 - `sirerun/husky` is public, with no commits, source, license, CI, design, plan, devlog, ADRs, or indexed code graph at discovery time.
-- Manual greenfield discovery found 12 planned use cases: 8 P0 and 4 P1. None is wired. Local manifest: `.claude/scratch/usecases-manifest.json`.
+- Manual greenfield discovery found 12 planned use cases: 8 P0 and 4 P1. None is wired.
 - The provided glass-chat-2 reference contains HTML/CSS/JS and a demo endpoint. It has no production backend. Its appearance specification is useful, but its transport and demo replies are not Husky implementations.
 - The reference uses backdrop blur/transparency, explicit light/dark text tone, and an alpha-mask top fade. Automatic backdrop-luminance sampling is not established reference behavior.
 - Local reference rendering was blocked by browser URL policy. Source inspection is complete; visual/native fidelity is unverified. Capture comparison evidence through a supported native/manual route, without circumventing that policy.
@@ -48,30 +48,43 @@ Layer coverage: native frontend is required; the common API, generated client, a
 
 ## 4. Checkable work breakdown
 
-Acceptance is stated under each task without requiring optional execution tooling. Dependencies are controller gates. All tasks are open; discovery evidence above does not mark delivery work complete. Estimates are work sessions, not calendar commitments.
+Acceptance is stated under each task without requiring optional execution tooling. Dependencies are controller gates. Task rows record verified completion and explicit dependency blocks; discovery evidence alone does not mark delivery work complete. Estimates are work sessions, not calendar commitments.
 
 ### E0 — reviewed project bootstrap (fidelity: executable)
 
 Acceptance: a reviewed docs/license-only base exists on remote main so normal code PRs can start; public records contain no private machine information.
 
-- [ ] T0.0 Preflight scope, worktree, and empty-remote bootstrap  Owner: coordinator  Est: 1 session  kind: agent stage: preflight  deps: []  delivers: [D0]
+- [x] T0.0 Preflight scope, worktree, and empty-remote bootstrap  Owner: coordinator  Est: 1 session  kind: agent stage: preflight  deps: []  delivers: [D0]
   - Acceptance: re-read current refs/status and project channel; verify external storage; record source-asset rights and compatibility assumptions; verify remote has no competing base or work. Record missing signing prerequisites without blocking local UI discovery. Define the docs-only genesis exception below.
-- [ ] T0.1 Prepare the docs/license-only bootstrap candidate  Owner: bootstrap worker  Est: 1 session  kind: agent stage: implement  deps: [T0.0]  delivers: [D0]
+- [x] T0.1 Prepare the docs/license-only bootstrap candidate  Owner: bootstrap worker  Est: 1 session  kind: agent stage: implement  deps: [T0.0]  delivers: [D0]
   - Acceptance: candidate contains project planning records, the official Apache-2.0 LICENSE, minimal project instructions, and ignore rules for scratch, build artifacts, and the project channel. No application code or copied unqualified assets are included. Set an appropriate project copyright notice; preserve any required third-party notices.
-- [ ] T0.2 Verify bootstrap content and public hygiene  Owner: coordinator  Est: 1 session  kind: agent stage: verify  deps: [T0.1]  delivers: [D0]
+- [x] T0.2 Verify bootstrap content and public hygiene  Owner: coordinator  Est: 1 session  kind: agent stage: verify  deps: [T0.1]  delivers: [D0]
   - Acceptance: license text matches the official source; plan dependencies and links resolve; proposed choices remain labeled; public diff has no secrets, personal paths, hostnames, private endpoints, or private project material. Stage only intended durable artifacts; scratch is excluded.
-- [ ] T0.3 Independent content review of T0.1  Owner: independent reviewer  Est: 1 session  kind: agent stage: review  deps: [T0.2]  delivers: [D0]
-  - Acceptance: reviewer identity, empty-tree base, candidate root/head SHA, scope, findings, and dispositions are recorded; blocking findings resolved with renewed verification and review.
-- [ ] T0.4 Establish remote main with the reviewed docs-only genesis  Owner: coordinator  Est: 1 session  kind: agent stage: merge  deps: [T0.3]  delivers: [D0]
+- [x] T0.3 Independent content review of T0.1  Owner: independent reviewer  Est: 1 session  kind: agent stage: review  deps: [T0.2]  delivers: [D0]
+  - Acceptance: reviewer identity, exact base/head SHA, scope, findings, and dispositions are recorded. Initial independent review of PR #1 returned BLOCK with findings T03-01 through T03-03. Remediation, affected verification, and an exact-head re-review are tracked in T0.6–T0.8; the findings block any further bootstrap merge until T0.8 passes.
+- [x] T0.4 Establish remote main with the reviewed docs-only genesis  Owner: coordinator  Est: 1 session  kind: agent stage: merge  deps: [T0.3]  delivers: [D0]
   - Acceptance: recheck the remote is still empty and publish exactly the reviewed docs-only root using a non-forced push. Record remote main SHA. This explicit bootstrap exception is necessary because GitHub cannot rebase-merge a PR without a base branch; it never includes source implementation. If a base now exists, reconcile and use a normal reviewed rebase PR instead.
-- [ ] T0.5 Verify the landed project base  Owner: coordinator  Est: 1 session  kind: agent stage: verify-landed  deps: [T0.4]  delivers: [D0]
+- [x] T0.5 Verify the landed project base  Owner: coordinator  Est: 1 session  kind: agent stage: verify-landed  deps: [T0.4]  delivers: [D0]
   - Acceptance: remote main equals the recorded reviewed revision, license is discoverable, intended docs are present, and no scratch/private material landed. E1 can branch from this SHA.
+
+The initial T0.3 review found that the merged bootstrap did not meet all T0.1/T0.2 acceptance criteria. Its corrective delivery is explicit:
+
+- [x] T0.6 Remediate T03-01 through T03-03  Owner: coordinator  Est: 1 session  kind: agent stage: implement  deps: [T0.3]  delivers: [D0]
+  - Acceptance: add concise project instructions and attribution without editing the official Apache license text; remove the private scratch-manifest locator from public documentation. Preserve the docs-only boundary and all authored project decisions.
+- [x] T0.7 Verify T0.6 bootstrap remediation  Owner: coordinator  Est: 1 session  kind: agent stage: verify  deps: [T0.6]  delivers: [D0]
+  - Acceptance: the copyright notice names the owner-selected project holder; LICENSE remains byte-for-byte identical to the official Apache-2.0 text; project instructions and plan/design links resolve; no ignored scratch path, private local path, secret, endpoint, or implementation asset is added.
+- [ ] T0.8 Independent exact-head review of T0.6 remediation  Owner: independent reviewer  Est: 1 session  kind: agent stage: review  deps: [T0.7]  delivers: [D0]
+  - Acceptance: a fresh reviewer authored none of the candidate, records the correction PR URL, exact base/head SHA, all T03 finding dispositions, public hygiene and license evidence; no blocking findings remain.
+- [ ] T0.9 Rebase-merge the bootstrap correction PR  Owner: coordinator  Est: 1 session  kind: agent stage: merge  deps: [T0.8]  delivers: [D0]
+  - Acceptance: merge the exact approved correction PR through GitHub rebase and record the landed SHA. No force push or stale review is used.
+- [ ] T0.10 Verify the corrected project base  Owner: coordinator  Est: 1 session  kind: agent stage: verify-landed  deps: [T0.9]  delivers: [D0]
+  - Acceptance: remote main contains the reviewed project instructions and notice, the public plan has no scratch locator, Apache license bytes are unchanged, and the tree contains no T03 blocker. T1.0 may proceed from this verified base.
 
 ### E1 — native fidelity proof and API foundation (fidelity: executable)
 
 Acceptance: a native panel demonstrates the requested appearance and behavior, and a pinned protobuf contract/client/fixture communicate over real gRPC. This is a foundation milestone, not a usable release.
 
-- [ ] T1.0 Preflight native and transport foundation  Owner: coordinator  Est: 1 session  kind: agent stage: preflight  deps: [T0.5]  delivers: [D1]
+- [ ] T1.0 Preflight native and transport foundation  Owner: coordinator  Est: 1 session  kind: agent stage: preflight  deps: [T0.5, T0.10]  delivers: [D1]
   - Acceptance: exact base/ownership recorded; dependency versions, macOS deployment target, architecture, bundle ID availability, proto generation, and package licenses qualified. CI check definitions and native evidence route chosen. External build caches and shared lease procedure verified before builds. Freeze the shell/core interface, protobuf wire contract and generated-binding baseline, event model, error semantics, target/source paths, and file ownership before parallel workers edit. The coordinator prepares only the minimal shared contract scaffold in this gate; T1.4 explicitly reviews it. Record a versioned contract snapshot so the client and fixture lanes start independently without guessing APIs.
 - [ ] T1.1 Implement native floating-panel proof  Owner: UI worker  Est: 2–3 sessions  kind: agent stage: implement  deps: [T1.0]  verifies: [UC-H01, UC-H02, UC-H03, UC-H08]  delivers: [D1]
   - Acceptance: borderless transparent AppKit panel hosts SwiftUI bubbles/composer; whole stack drags; first launch defaults to the bottom left of the active display’s visible frame, inset from the Dock and screen edges; no title bar, frame, or opaque rectangular window background is visible; view scrolls up/down; reference geometry, alternating alignment, fade, and appearance are preserved. Prototype compares native backdrop materials with custom tint/border layers. No network, microphone, or fake production assistant is hidden in the UI.
@@ -119,11 +132,11 @@ Negative updater tests use an isolated fixture/feed: tampered archives, unavaila
 
 ## 5. Parallel work and waves
 
-One coordinator owns contracts, integration, stage transitions, and final evidence. Execution should use GPT-6-Luna workers where safe, with isolated external-SSD worktrees and explicit file ownership; load team/crew guidance first. Respect the active harness limit of three workers plus the coordinator. The same shell/API agreement is finalized before implementation dispatch; independent review uses a fresh reviewer that authored neither scope.
+One coordinator owns contracts, integration, stage transitions, and final evidence. Execution uses GPT-6-Luna workers where safe, with isolated external-SSD worktrees and explicit file ownership; load team/crew guidance first. Respect the active harness limit of three workers plus the coordinator. The same shell/API agreement is finalized before implementation dispatch; independent review uses a fresh reviewer that authored neither scope.
 
 | Wave | Work | Workers / ownership |
 |---|---|---|
-| 0 | T0.0–T0.5, sequential stage gates | One bootstrap worker, then one independent reviewer; coordinator publishes/verifies |
+| 0 | T0.0–T0.5, then T0.6–T0.10 for accepted review findings | Bootstrap work and remediation are verified and independently reviewed before their respective rebase merges; coordinator owns the merge and landed checks |
 | 1 | T1.0 | Coordinator qualifies tools and freezes shared interfaces |
 | 2 | T1.1, T1.2, T1.8 concurrently; coordinator overlaps T1.9 | UI owns `App/Husky/`; transport owns `proto/husky/v1/`, `Packages/HuskyProtocol/`, `Packages/HuskyCore/`; fixture owns `Tools/HuskyFixture/`; coordinator alone owns root project/package/CI files. Frozen protocol changes require coordinator reconciliation. |
 | 3 | T1.7, then T1.3–T1.6 | Integrate all four scopes; verify; fresh independent reviewer covers T1.0 scaffold and every implementation row; exact-head merge and landed verification stay sequential. Release completed workers before assigning the reviewer. |
@@ -139,7 +152,7 @@ Never dispatch an outline's implementation until its planning task creates execu
 
 | Milestone | Exit criterion | Dependency |
 |---|---|---|
-| M0: project base | Public reviewed docs/license base is present | T0.5 |
+| M0: project base | Public reviewed docs/license base, project instructions and copyright notice are present; the bootstrap review findings are resolved | T0.10 |
 | M1: foundation | Native fidelity and real gRPC contract proof landed | T1.6 |
 | M2: usable client | D2 end-to-end workflows pass on landed source | E2 generated landed-verification gate |
 | M3: distributable release | D3 signed artifact/feed remotely verified | E3 generated release verification gate |
@@ -174,6 +187,7 @@ Because this is a public repository, ignore the append-only project channel and 
 ## 9. Progress log
 
 - 2026-10-04: refined E1 to three independent worker lanes plus coordinator scaffolding after a shared contract freeze. Added T1.8/T1.9 without renumbering historical IDs. Confirmed frameless transparent chat and bottom-left initial placement from the glass-chat-2 dist reference; later outline expansions must separate ready work from signing/publication gates. No application task is completed by this refinement.
+- 2026-10-04: independent T0.3 reviewer examined PR #1 at base `504b574b2ead1718fb2aa64fb969b75ab15d1479` / head `7dc577542570b941d6aaf9f647af1f2596c685b0` and returned BLOCK. Stable findings: T03-01 missing project instructions, T03-02 public ignored scratch-manifest locator, T03-03 missing project copyright notice. Reviewer confirmed Apache LICENSE was byte-identical to upstream and found no other public-boundary issue. T0.6–T0.10 track remediation through re-review and landed verification; T1.0 now depends on T0.10.
 
 - 2026-10-03: created this initial plan and architecture/decision records after product clarification and read-only environment discovery. All delivery tasks remain open. Signing and exact native visual equivalence remain unverified.
 
