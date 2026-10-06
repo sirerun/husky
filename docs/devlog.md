@@ -1,5 +1,10 @@
 # Husky devlog
 
+
+## 2026-10-05 — Session closeout and message direction styling
+
+Outgoing user bubbles now have an 8% accent fill and 22% accent outline; incoming bubbles keep their neutral material and 15% primary outline. Text, accessibility labels, alignment, and the 20% smaller panel/bubble geometry remain intact. Strict Swift formatting and patch validation pass. The owner requested source merge and knowledge banking for session shutdown; native drag/restore and the other unverified product/release acceptance gates remain open. Final verification and landing evidence will be recorded in the closeout handoff.
+
 ## 2026-10-05 — Explicit chat window move handle
 
 Added a visible header move icon with its own drag gesture, accessibility label/hint, and help text so users can find and grab the floating chat window. `swift build`, the complete Swift test suite (31 tests), strict formatting lint for the changed view, and `git diff --check` pass locally. An independent Luna review found no source blocker. CUA confirms the move handle is exposed in the accessibility tree, but the coordinate-based drag probes did not produce reliable frame movement evidence; retain the native drag/position-restore acceptance gate as open. Draft PR #4 remains blocked from hosted CI because GitHub has not started a runner under the account billing lock.
