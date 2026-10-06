@@ -288,7 +288,14 @@ private struct HuskyMessageBubble: View {
           }
           .overlay {
             RoundedRectangle(cornerRadius: HuskyPanelLayout.messageCornerRadius, style: .continuous)
-              .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+              .fill(Color.accentColor.opacity(message.role == .user ? 0.08 : 0))
+          }
+          .overlay {
+            RoundedRectangle(cornerRadius: HuskyPanelLayout.messageCornerRadius, style: .continuous)
+              .strokeBorder(
+                message.role == .user
+                  ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.15),
+                lineWidth: 1)
           }
         }
         .clipShape(
