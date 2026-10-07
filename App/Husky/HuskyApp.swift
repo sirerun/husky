@@ -106,7 +106,10 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @MainActor
-private final class HuskyUnconfiguredChatClient: HuskyChatPanelClient {
+private final class HuskyUnconfiguredChatClient: HuskyRecoverableSettingsClient {
+  func recoverSettings() throws {
+    try HuskyProfileStore.recoverPreferences()
+  }
   private enum ClientError: LocalizedError {
     case noBackend
 

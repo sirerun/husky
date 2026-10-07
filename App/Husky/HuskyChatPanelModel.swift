@@ -6,6 +6,9 @@ import Observation
 @MainActor
 final class HuskyChatPanelModel {
   private var fixtureMessages: [HuskyPanelMessage] = []
+  var recoveryClient: (any HuskyRecoverableSettingsClient)? {
+    client as? any HuskyRecoverableSettingsClient
+  }
   var liveClient: HuskyLiveChatClient? { client as? HuskyLiveChatClient }
   var messages: [HuskyPanelMessage] {
     if let liveClient {

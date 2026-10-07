@@ -7,6 +7,8 @@ struct HuskyChatPanelView: View {
   private let isDemo: Bool
   @State private var localDraft = ""
   @State private var showsSettings = false
+  @State private var showsRecovery = false
+  @State private var recoveryResult: String?
   @State private var newConversationTitle = ""
   @State private var showsCreateConversation = false
   private var draft: String { model.liveClient?.draft.text ?? localDraft }
@@ -32,6 +34,10 @@ struct HuskyChatPanelView: View {
     VStack(spacing: 12) {
       header
       if let live = model.liveClient { clientControls(live) }
+      if model.recoveryClient != nil {
+        Button("Recover connection settings…") { showsRecovery = true }
+        if let recoveryResult { Text(recoveryResult).font(.caption) }
+      }
       transcript
       composer
       if let statusText = model.statusText {
@@ -45,6 +51,21 @@ struct HuskyChatPanelView: View {
     .frame(width: HuskyPanelLayout.width, height: HuskyPanelLayout.height)
     .background(Color.clear)
     .preferredColorScheme(nil)
+    .alert("Reset local connection settings?", isPresented: $showsRecovery) {
+      Button("Preserve Backup and Reset", role: .destructive) {
+        do {
+          try model.recoveryClient?.recoverSettings()
+          recoveryResult = "A backup was preserved. Quit and reopen Husky to configure connections."
+        } catch {
+          recoveryResult = "Recovery failed. Your existing settings have been retained."
+        }
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text(
+        "The existing settings and drafts will be kept in a local preferences backup. Saved Keychain tokens will remain untouched. Restart Husky after recovery."
+      )
+    }
     .sheet(isPresented: $showsSettings) {
       if let live = model.liveClient { HuskyConnectionSettings(client: live) }
     }
@@ -296,7 +317,12 @@ struct HuskyChatPanelView: View {
   private var composer: some View {
     HStack(alignment: .bottom, spacing: 10) {
       TextField("Message", text: draftBinding, axis: .vertical)
-        .disabled(model.liveClient?.draft.pendingRequestID != nil)
+        .disabled(
+          model.liveClient?.draft.pendingRequestID != nil
+            || model.recoveryClient != nil
+            || (model.liveClient != nil
+              && model.liveClient?.conversation.selectedConversationID == nil)
+        )
         .textFieldStyle(.plain)
         .font(.body)
         .lineLimit(1...5)

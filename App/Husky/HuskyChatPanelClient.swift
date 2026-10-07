@@ -21,3 +21,8 @@ protocol HuskyChatPanelClient: AnyObject {
   func submit(_ text: String) async throws
   func shutdown() async
 }
+
+@MainActor
+protocol HuskyRecoverableSettingsClient: HuskyChatPanelClient {
+  func recoverSettings() throws
+}

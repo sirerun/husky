@@ -121,8 +121,16 @@ final class HuskyLiveChatClient: HuskyChatPanelClient {
     guard let requestID = record.pendingRequestID, let pendingText = record.pendingText,
       pendingText == text
     else { throw SendError.pending }
-    let accepted = await conversation.submit(text: pendingText, requestID: requestID)
-    guard accepted else { throw SendError.unknown }
+    let result = await conversation.submitResult(text: pendingText, requestID: requestID)
+    if result == .unconfirmed { throw SendError.unknown }
+    if result == .rejected {
+      let saved = profiles.draft(profileID: profile, conversationID: conversationID)
+      if saved.pendingRequestID == requestID {
+        try profiles.setDraft(
+          .init(text: saved.text), profileID: profile, conversationID: conversationID)
+      }
+      throw SendError.rejected
+    }
     // Use the originating scope even if the UI has switched while awaiting acceptance.
     let saved = profiles.draft(profileID: profile, conversationID: conversationID)
     if saved.pendingRequestID == requestID {
@@ -142,11 +150,12 @@ final class HuskyLiveChatClient: HuskyChatPanelClient {
   func statusUpdates() -> AsyncStream<String?> { AsyncStream { $0.finish() } }
 
   private enum SendError: LocalizedError {
-    case unavailable, pending, unknown
+    case unavailable, pending, unknown, rejected
     var errorDescription: String? {
       switch self {
       case .unavailable: "Select a connected conversation before sending."
       case .pending: "Retry the pending message before editing it."
+      case .rejected: "The message was not accepted. Check its length or edit it before retrying."
       case .unknown: "Acceptance is unconfirmed. Retry uses the same message ID."
       }
     }
