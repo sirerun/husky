@@ -50,8 +50,7 @@ extension HuskyChatClient {
     partialMessages: [HuskyPartialMessageSnapshot]
   ) async throws -> any HuskyConversationSession {
     guard partialMessages.isEmpty else {
-      throw HuskyClientError.malformedResponse(
-        "client adapter does not support partial message recovery")
+      throw HuskyPartialRecoveryError.unsupportedAdapter
     }
     return try await openConversation(
       conversationID: conversationID, afterSequence: afterSequence, resumeToken: resumeToken)

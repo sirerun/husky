@@ -72,7 +72,7 @@ enum HuskyMessageBodyValidator {
 
     case .textDelta(let requestID, let messageID, let revision, let append, let replace):
       guard var partial = partialMessages[messageID] else {
-        throw HuskyClientError.malformedResponse("text delta arrived before message start")
+        throw HuskyPartialRecoveryError.missingBaseline
       }
       guard requestID == partial.requestID else {
         throw HuskyClientError.malformedResponse(

@@ -88,6 +88,11 @@ public struct HuskyConversationPage: Sendable, Equatable {
   }
 }
 
+public enum HuskyPartialRecoveryError: Error, Sendable, Equatable {
+  case missingBaseline
+  case unsupportedAdapter
+}
+
 public struct HuskyPartialMessageSnapshot: Sendable, Equatable {
   public let message: HuskyMessage
   public let revision: UInt64
