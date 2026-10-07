@@ -30,11 +30,17 @@ final class HuskyProfileStoreTests: XCTestCase {
     )
     XCTAssertEqual(try ipv6Loopback.validatedEndpoint().port, 50_051)
     XCTAssertFalse(try ipv6Loopback.validatedEndpoint().usesTLS)
+
+    let ipv4Loopback = HuskyBackendProfile(
+      name: "IPv4 fixture",
+      endpoint: "http://127.0.0.1:50051",
+      allowsInsecureLoopback: true
+    )
+    XCTAssertEqual(try ipv4Loopback.validatedEndpoint().host, "127.0.0.1")
   }
 
   func testEndpointValidationRejectsCredentialsPathsQueriesFragmentsAndNonLoopbackHTTP() {
     let invalidEndpoints = [
-      "http://127.0.0.1:50051",
       "http://localhost:50051",
       "http://192.168.1.10:50051",
       "http://127.00.0.1:50051",
@@ -45,6 +51,8 @@ final class HuskyProfileStoreTests: XCTestCase {
       "ftp://chat.example",
       "https://chat.example:70000",
       "https://chat.example:0",
+      "https://chat.example:8443\n",
+      "https://chat .example:8443",
     ]
 
     for endpoint in invalidEndpoints {

@@ -38,7 +38,9 @@ public struct HuskyBackendProfile: Codable, Sendable, Equatable, Identifiable {
     guard !trimmedName.isEmpty, self.name.utf8.count <= 256 else {
       throw HuskyProfileStoreError.invalidProfileName
     }
+    let endpointWhitespaceOrControls = CharacterSet.whitespacesAndNewlines.union(.controlCharacters)
     guard self.endpoint == self.endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+      !self.endpoint.unicodeScalars.contains(where: endpointWhitespaceOrControls.contains),
       let components = URLComponents(string: self.endpoint),
       components.url != nil,
       components.user == nil,
