@@ -62,3 +62,14 @@ document describes the intended implemented interface, not production-backend,
 signed-release, installation or automatic-update acceptance. Recorded exact
 revision checks and remaining native gates live in [the plan](plan.md) and
 [development log](devlog.md).
+
+For reconnects during an in-progress reply, advertise `partial_message_snapshots` and
+include the exact active message text and last revision in each history snapshot. See the
+additive recovery extension in the wire contract. Clients do not infer missing text or reset
+unknown revisions to zero. Backends lacking this extension can still serve complete history
+and ordinary streams, but fresh attach during a partial response is not qualified.
+
+Conversation creation reuses a pending request ID/title within the live controller after an
+ambiguous failure. That create intent is not yet durable across application restarts; inspect
+the backend conversation list before creating again after restarting. Message submission IDs
+and payloads, separately, are persisted per conversation.

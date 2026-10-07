@@ -50,3 +50,20 @@ The foundation will claim only local source, build, fixture, and native evidence
 - [gRPC Swift Protobuf](https://github.com/grpc/grpc-swift-protobuf/releases/tag/2.4.1)
 - [SwiftProtobuf 1.38.1](https://github.com/apple/swift-protobuf/releases/tag/1.38.1)
 - [gRPC Swift Protobuf code-generation plugin](https://github.com/grpc/grpc-swift-protobuf/blob/main/Sources/GRPCProtobuf/Documentation.docc/Articles/Code-generation-with-the-build-plugin.md)
+
+## Additive E2 recovery extension
+
+Servers that advertise `partial_message_snapshots` include `GetHistoryResponse.partial_messages`
+(field 5) at exactly `snapshot_sequence`. Each `PartialMessageState` contains the full current
+`ChatMessage` and its latest text revision (zero before the first delta). Include every active
+message, even outside the requested history page, and keep snapshots stable across pagination.
+Completed/canceled/failed messages are excluded. Limit this list to 64 unique IDs and 2 MiB of
+aggregate text, in addition to negotiated per-message limits. A snapshot message must have a
+positive sequence no newer than the history boundary and belong to the requested conversation.
+
+A client retains the exact partial text/revision at its applied event cursor for reconnect.
+Initial attach or canonical resynchronization replaces that state from history. Both transport
+and presentation validators begin with these seeds; the next delta must strictly increase the
+revision, and cumulative text still obeys the byte limit. An unseeded delta is a protocol error,
+not permission to guess prior text. Old servers remain wire-compatible but cannot qualify
+fresh-attach recovery during an in-progress message without this capability.
