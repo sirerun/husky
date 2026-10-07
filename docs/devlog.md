@@ -99,3 +99,26 @@ semantics; static and original fixture demonstrations remain explicit.
 Three isolated Luna workers own profile storage, conversation orchestration and
 native window lifecycle. Native Mac exemption applies; new full builds/tests
 remain held while host load exceeds 10. No new runtime or release claim is made.
+
+## E2 verification checkpoint — 2026-10-06
+
+At `2491d65`, a fresh native `swift test --jobs 2 --cache-path .build/package-cache`
+build and all 77 tests passed (58 core, 10 fixture/auth, 9 geometry) under the
+shared build lease. The initial run at `0532080` had two failures; endpoint
+validation and the paginated canonical-history expectation were corrected,
+alongside independently identified replay/create/history/reconnect races.
+Both leases were released. Formatting and diff checks passed.
+
+The isolated native proof app launched and wrote a 448×544 autosaved frame,
+but CUA returned `cgWindowNotFound`. A read-only session check confirmed the
+Mac screen was locked. No unlock was attempted. Saved preferences are not
+visible-window, drag, focus, IME, display/Dock or accessibility acceptance.
+Owned proof-app and loopback-fixture processes were stopped; no user app or
+shared process was stopped. Native acceptance remains blocked on an unlocked
+interactive session.
+
+A subsequent additive recovery extension is under verification: authoritative
+partial text/revision snapshots and seed propagation through both transport and
+controller validators. It prevents guessing state when attaching during an
+in-progress message. These changes need a fresh integrated test result and
+independent review; the 77-test result does not cover them. PR #6 remains draft.
