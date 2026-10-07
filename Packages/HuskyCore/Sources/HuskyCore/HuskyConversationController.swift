@@ -561,7 +561,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       self.hasMoreHistory = page.hasMore && page.nextCursor != nil
       self.historySnapshotSequence = page.snapshotSequence
       self.cursor = HuskyEventCursor(conversationID: id, afterSequence: page.snapshotSequence)
-      self.partialMessages = [:]
+      try self.installPartialMessages(
+        page.partialMessages, conversationID: id, afterSequence: page.snapshotSequence)
       self.isLoading = false
       await self.openResumedStream(client: client, conversationID: id, generation: generation)
     } catch {
@@ -582,11 +583,14 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       self.generation == generation
     else { return }
     do {
+      let partialSnapshots = try self.partialSnapshotsForResume(
+        conversationID: conversationID, afterSequence: cursor.lastAppliedSequence)
       let opened = try await self.bounded(self.operationTimeout) {
         try await client.openConversation(
           conversationID: conversationID,
           afterSequence: cursor.lastAppliedSequence,
-          resumeToken: cursor.resumeToken)
+          resumeToken: cursor.resumeToken,
+          partialMessages: partialSnapshots)
       }
       guard self.generation == generation, self.selectedConversationID == conversationID else {
         await self.finishSession(opened)
@@ -600,7 +604,9 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       guard self.generation == generation else { return }
       self.isLoading = false
       self.isConnected = false
-      self.statusText = "The conversation could not reconnect. Select Reconnect to try again."
+      self.statusText = Self.isUnsupportedPartialRecoveryAdapter(error)
+        ? "The in-progress reply cannot be resumed safely by this client. Reconnect after it finishes or select another conversation."
+        : "The conversation could not reconnect. Select Reconnect to try again."
     }
   }
 
@@ -642,6 +648,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
             refreshHistory: true)
           return
         case .deliver:
+          let previousSequence = cursor.lastAppliedSequence
           try self.apply(sequencedEvent, conversationID: conversationID)
           try cursor.acknowledge(sequencedEvent)
           guard self.generation == generation else { return }
@@ -649,6 +656,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
           if case .sessionReady = sequencedEvent.event {
             self.isConnected = true
             self.statusText = nil
+          } else if sequencedEvent.sequence > previousSequence {
             self.recoveryAttempts = 0
           }
         }
@@ -659,6 +667,11 @@ public enum HuskySubmissionResult: Sendable, Equatable {
         refreshHistory: false)
     } catch {
       guard !Task.isCancelled, self.generation == generation else { return }
+      if Self.isMissingPartialMessageBaseline(error) {
+        await self.stopAfterUnseededPartialMessage(
+          session: session, conversationID: conversationID, generation: generation)
+        return
+      }
       await self.recoverFromStream(
         client: client, conversationID: conversationID, generation: generation,
         refreshHistory: false)
@@ -765,7 +778,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
             conversationID: conversationID, pageSize: pageSize, before: nil)
         }
         guard self.generation == generation else { return }
-        self.mergeCanonicalSnapshot(page)
+        try self.mergeCanonicalSnapshot(page, conversationID: conversationID)
       } catch {
         guard self.generation == generation else { return }
         self.statusText =
@@ -782,12 +795,24 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       client: client, conversationID: conversationID, generation: generation)
   }
 
-  private func mergeCanonicalSnapshot(_ page: HuskyHistoryPage) {
+  private func mergeCanonicalSnapshot(
+    _ page: HuskyHistoryPage, conversationID: String
+  ) throws {
     let snapshot = page.snapshotSequence
+    let seededPartials = try HuskyMessageBodyValidator.seed(
+      page.partialMessages, conversationID: conversationID, afterSequence: snapshot,
+      maximumBytes: self.capabilities?.maximumMessageUTF8Bytes ?? UInt32.max)
     var byID = Dictionary(
       uniqueKeysWithValues: self.messages.filter { $0.sequence <= snapshot }.map { ($0.id, $0) })
     for message in page.messages {
       byID[message.id] = message
+    }
+    let pageIDs = Set(page.messages.map(\.id))
+    for oldID in self.partialMessages.keys where seededPartials[oldID] == nil && !pageIDs.contains(oldID) {
+      byID.removeValue(forKey: oldID)
+    }
+    for partial in page.partialMessages {
+      byID[partial.message.id] = partial.message
     }
     self.messages = byID.values.sorted(by: Self.messageOrder)
     self.historySnapshotSequence = snapshot
@@ -795,7 +820,73 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     self.seenHistoryCursors = page.nextCursor.map { [$0] } ?? []
     self.hasMoreHistory = page.hasMore && page.nextCursor != nil
     self.cursor?.reset(after: snapshot, resumeToken: nil)
-    self.partialMessages = [:]
+    self.partialMessages = seededPartials
+  }
+
+  private func installPartialMessages(
+    _ snapshots: [HuskyPartialMessageSnapshot], conversationID: String, afterSequence: UInt64
+  ) throws {
+    let seeded = try HuskyMessageBodyValidator.seed(
+      snapshots, conversationID: conversationID, afterSequence: afterSequence,
+      maximumBytes: self.capabilities?.maximumMessageUTF8Bytes ?? UInt32.max)
+    var byID = Dictionary(uniqueKeysWithValues: self.messages.map { ($0.id, $0) })
+    for snapshot in snapshots {
+      byID[snapshot.message.id] = snapshot.message
+    }
+    self.messages = byID.values.sorted(by: Self.messageOrder)
+    self.partialMessages = seeded
+  }
+
+  private func partialSnapshotsForResume(
+    conversationID: String, afterSequence: UInt64
+  ) throws -> [HuskyPartialMessageSnapshot] {
+    let snapshots = try self.partialMessages.map { id, partial -> HuskyPartialMessageSnapshot in
+      guard let message = self.messages.first(where: { $0.id == id }) else {
+        throw HuskyClientError.malformedResponse("partial message is missing from displayed history")
+      }
+      return HuskyPartialMessageSnapshot(
+        message: HuskyMessage(
+          id: message.id, conversationID: message.conversationID, role: message.role,
+          text: partial.text, createdAt: message.createdAt, requestID: partial.requestID,
+          sequence: message.sequence),
+        revision: partial.revision)
+    }.sorted {
+      if $0.message.sequence != $1.message.sequence {
+        return $0.message.sequence < $1.message.sequence
+      }
+      return $0.message.id < $1.message.id
+    }
+    _ = try HuskyMessageBodyValidator.seed(
+      snapshots, conversationID: conversationID, afterSequence: afterSequence,
+      maximumBytes: self.capabilities?.maximumMessageUTF8Bytes ?? UInt32.max)
+    return snapshots
+  }
+
+  private func stopAfterUnseededPartialMessage(
+    session: any HuskyConversationSession, conversationID: String, generation: UInt64
+  ) async {
+    guard self.generation == generation,
+      self.selectedConversationID == conversationID
+    else { return }
+    self.isConnected = false
+    self.statusText =
+      "The backend resumed an in-progress reply without its exact state. Automatic recovery is paused to avoid corrupting it."
+    self.session = nil
+    await self.finishSession(session)
+  }
+
+  private static func isMissingPartialMessageBaseline(_ error: Error) -> Bool {
+    guard let recoveryError = error as? HuskyPartialRecoveryError,
+      case .missingBaseline = recoveryError
+    else { return false }
+    return true
+  }
+
+  private static func isUnsupportedPartialRecoveryAdapter(_ error: Error) -> Bool {
+    guard let recoveryError = error as? HuskyPartialRecoveryError,
+      case .unsupportedAdapter = recoveryError
+    else { return false }
+    return true
   }
 
   private func mergeOlderPage(_ incoming: [HuskyMessage]) {
