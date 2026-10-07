@@ -18,14 +18,16 @@ enum HuskyHistoryValidator {
 /// connection metadata, and credential storage stay at the profile boundary.
 public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
   private let backend: HuskyHuskyBackend.Client<Transport>
+  private let metadata: Metadata
 
-  public init(backend: HuskyHuskyBackend.Client<Transport>) {
+  public init(backend: HuskyHuskyBackend.Client<Transport>, metadata: Metadata = [:]) {
+    self.metadata = metadata
     self.backend = backend
   }
 
   public func getCapabilities() async throws -> HuskyCapabilities {
     let response = try await self.backend.getCapabilities(
-      HuskyGetCapabilitiesRequest(), options: HuskyGRPCMapper.unaryCallOptions)
+      HuskyGetCapabilitiesRequest(), metadata: metadata, options: HuskyGRPCMapper.unaryCallOptions)
     return try HuskyGRPCMapper.mapCapabilities(response)
   }
 
@@ -38,7 +40,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     request.pageSize = pageSize
     request.beforeCursor = cursor ?? ""
     let response = try await self.backend.listConversations(
-      request, options: HuskyGRPCMapper.unaryCallOptions)
+      request, metadata: metadata, options: HuskyGRPCMapper.unaryCallOptions)
     return HuskyConversationPage(
       conversations: try response.conversations.map(HuskyGRPCMapper.mapConversation),
       nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor,
@@ -53,7 +55,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     request.clientRequestID = requestID
     request.title = title
     let response = try await self.backend.createConversation(
-      request, options: HuskyGRPCMapper.unaryCallOptions)
+      request, metadata: metadata, options: HuskyGRPCMapper.unaryCallOptions)
     return try HuskyGRPCMapper.mapConversation(response.conversation)
   }
 
@@ -70,7 +72,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     request.pageSize = pageSize
     request.beforeCursor = cursor ?? ""
     let response = try await self.backend.getHistory(
-      request, options: HuskyGRPCMapper.unaryCallOptions)
+      request, metadata: metadata, options: HuskyGRPCMapper.unaryCallOptions)
     let messages = try response.messages.map { message in
       try HuskyGRPCMapper.mapMessage(
         message,
@@ -97,6 +99,7 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     let capabilities = try await self.getCapabilities()
     return GRPCHuskyConversationSession(
       backend: self.backend,
+      metadata: metadata,
       conversationID: conversationID,
       afterSequence: afterSequence,
       resumeToken: resumeToken,
@@ -396,6 +399,7 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
 
   init(
     backend: HuskyHuskyBackend.Client<Transport>,
+    metadata: Metadata,
     conversationID: String,
     afterSequence: UInt64,
     resumeToken: String?,
@@ -412,7 +416,7 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
     self.rpcTaskControl = rpcTaskControl
     let rpcTask = Task {
       do {
-        try await backend.conversationSession { writer in
+        try await backend.conversationSession(metadata: metadata) { writer in
           var start = HuskyStartSession()
           start.conversationID = conversationID
           start.afterSequence = afterSequence
@@ -521,7 +525,9 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
       self.abort(error: HuskyClientError.resynchronizationRequired)
     }
     self.commandStream.finish()
-    await self.rpcTask.value
+    // Closing the local session must not wait for an unresponsive peer.
+    self.rpcTaskControl.cancel()
+    self.eventBuffer.finish()
   }
 
   private func send(_ command: HuskyClientCommand) throws {

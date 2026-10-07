@@ -87,3 +87,15 @@ The user confirmed the supplied glass-chat-2 dist as the floating-chat reference
 - Sizing correction reviewed at `c536ce5`; both legacy frame variants now match the fresh-install target and custom frames remain unchanged.
 - Integrated `swift test --package-path .` passed on `74c9cf3` after correcting the two stale mapper-validator calls. Strict formatting, `swift package dump-package`, and `git diff --check` passed. The build emitted two pre-existing unnecessary-`try` warnings in `HuskyLimitTests.swift`.
 - Native fixture window screenshot measured 896×1088 pixels, corresponding to the 448×544-point target at 2×, and the existing conversation text remained readable. Several CUA drag attempts did not change the saved frame, so native movement and restore are still unverified.
+
+## E2 implementation continuation — 2026-10-06
+
+PR #5 rebase-merged the independently reviewed delivery plan at `ec984fb`.
+Reviewed candidate `cd5f226` had identical landed content. The E2 source work
+adds profile-specific authorization to all RPCs and explicitly cancels local
+session teardown so an unresponsive peer cannot block shutdown indefinitely.
+Normal startup is being wired to saved connections and accepted-message draft
+semantics; static and original fixture demonstrations remain explicit.
+Three isolated Luna workers own profile storage, conversation orchestration and
+native window lifecycle. Native Mac exemption applies; new full builds/tests
+remain held while host load exceeds 10. No new runtime or release claim is made.

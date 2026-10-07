@@ -1,9 +1,22 @@
+import HuskyCore
+import HuskyWindowing
 import SwiftUI
 
 struct HuskyChatPanelView: View {
   @State private var model: HuskyChatPanelModel
   private let isDemo: Bool
-  @State private var draft = ""
+  @State private var localDraft = ""
+  @State private var showsSettings = false
+  @State private var newConversationTitle = ""
+  @State private var showsCreateConversation = false
+  private var draft: String { model.liveClient?.draft.text ?? localDraft }
+  private var draftBinding: Binding<String> {
+    Binding(
+      get: { draft },
+      set: { value in
+        if let live = model.liveClient { live.editDraft(value) } else { localDraft = value }
+      })
+  }
   @State private var materialCandidate: HuskyMaterialCandidate = .hudWindow
   @State private var showsFullHistory = false
   @State private var isAtBottom = true
@@ -18,6 +31,7 @@ struct HuskyChatPanelView: View {
   var body: some View {
     VStack(spacing: 12) {
       header
+      if let live = model.liveClient { clientControls(live) }
       transcript
       composer
       if let statusText = model.statusText {
@@ -31,6 +45,69 @@ struct HuskyChatPanelView: View {
     .frame(width: HuskyPanelLayout.width, height: HuskyPanelLayout.height)
     .background(Color.clear)
     .preferredColorScheme(nil)
+    .sheet(isPresented: $showsSettings) {
+      if let live = model.liveClient { HuskyConnectionSettings(client: live) }
+    }
+    .alert("New conversation", isPresented: $showsCreateConversation) {
+      TextField("Title", text: $newConversationTitle)
+      Button("Create") {
+        let title = newConversationTitle
+        newConversationTitle = ""
+        Task { await model.liveClient?.createConversation(title: title) }
+      }
+      Button("Cancel", role: .cancel) {}
+    }
+  }
+
+  @ViewBuilder private func clientControls(_ live: HuskyLiveChatClient) -> some View {
+    HStack(spacing: 8) {
+      Menu {
+        ForEach(live.profiles.profiles) { profile in
+          Button(profile.name) { Task { await live.selectProfile(profile.id) } }
+        }
+        Divider()
+        Button("Connection settings…") { showsSettings = true }
+      } label: {
+        Label(
+          live.profiles.profiles.first { $0.id == live.profiles.selectedProfileID }?.name
+            ?? "Connect", systemImage: "network"
+        )
+        .lineLimit(1)
+      }
+      Menu {
+        ForEach(live.conversation.conversations) { conversation in
+          Button(conversation.title.isEmpty ? "Untitled" : conversation.title) {
+            Task { await live.selectConversation(conversation.id) }
+          }
+        }
+        if live.conversation.hasMoreConversations {
+          Button("Load more conversations") {
+            Task { await live.conversation.loadMoreConversations() }
+          }
+        }
+        Divider()
+        Button("New conversation…") { showsCreateConversation = true }
+      } label: {
+        Text(
+          live.conversation.conversations.first {
+            $0.id == live.conversation.selectedConversationID
+          }?.title ?? "Conversations"
+        )
+        .lineLimit(1)
+      }
+      .disabled(live.profiles.selectedProfileID == nil)
+      Button {
+        Task { await live.selectProfile(live.profiles.selectedProfileID) }
+      } label: {
+        Image(systemName: "arrow.clockwise")
+      }
+      .help("Reconnect")
+      .accessibilityLabel("Reconnect to backend")
+      if live.conversation.activeRequestID != nil {
+        Button("Cancel") { Task { await live.conversation.cancelActiveRequest() } }
+      }
+    }
+    .font(.caption)
   }
 
   private var header: some View {
@@ -118,6 +195,16 @@ struct HuskyChatPanelView: View {
       ScrollViewReader { scrollProxy in
         ScrollView(.vertical) {
           LazyVStack(alignment: .leading, spacing: 18 * HuskyPanelLayout.sizeScale) {
+            if let live = model.liveClient, live.conversation.hasMoreHistory {
+              Button("Load older messages") {
+                let anchor = model.messages.first?.id
+                Task {
+                  await live.conversation.loadOlderMessages()
+                  if let anchor { scrollProxy.scrollTo(anchor, anchor: .top) }
+                }
+              }
+              .disabled(live.conversation.isLoadingHistory)
+            }
             if model.messages.isEmpty {
               Text("Messages from your backend will appear here.")
                 .font(.body)
@@ -203,7 +290,8 @@ struct HuskyChatPanelView: View {
 
   private var composer: some View {
     HStack(alignment: .bottom, spacing: 10) {
-      TextField("Message", text: $draft, axis: .vertical)
+      TextField("Message", text: draftBinding, axis: .vertical)
+        .disabled(model.liveClient?.draft.pendingRequestID != nil)
         .textFieldStyle(.plain)
         .font(.body)
         .lineLimit(1...5)
@@ -221,7 +309,9 @@ struct HuskyChatPanelView: View {
       }
       .buttonStyle(.plain)
       .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isSending)
-      .accessibilityLabel("Send message")
+      .accessibilityLabel(
+        model.liveClient?.draft.pendingRequestID == nil ? "Send message" : "Retry pending message"
+      )
       .accessibilityHint("Sends this typed message to the selected backend")
     }
     .padding(.horizontal, 14)
@@ -252,7 +342,7 @@ struct HuskyChatPanelView: View {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     Task {
       if await model.submit(text) {
-        draft = ""
+        if model.liveClient == nil { localDraft = "" }
       }
     }
   }

@@ -18,6 +18,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
     ],
     targets: [
+        .target(name: "HuskyWindowing", path: "Packages/HuskyWindowing/Sources/HuskyWindowing"),
+        .testTarget(name: "HuskyWindowingTests", dependencies: ["HuskyWindowing"], path: "Packages/HuskyWindowing/Tests/HuskyWindowingTests"),
         .target(
             name: "HuskyProtocol",
             dependencies: [
@@ -45,6 +47,7 @@ let package = Package(
         .executableTarget(
             name: "Husky",
             dependencies: [
+                "HuskyWindowing",
                 "HuskyCore",
                 "HuskyProtocol",
                 .product(name: "GRPCCore", package: "grpc-swift-2"),
