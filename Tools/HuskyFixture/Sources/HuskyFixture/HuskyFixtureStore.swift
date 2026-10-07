@@ -18,6 +18,9 @@ public actor HuskyFixtureStore {
   private struct Conversation: Sendable {
     var summary: HuskyConversationSummary
     var messages: [HuskyChatMessage] = []
+    var partialMessages: [String: HuskyPartialMessageState] = [:]
+    var partialSnapshotsBySequence: [UInt64: [HuskyPartialMessageState]] = [:]
+    var partialSnapshotOrder: [UInt64] = []
     var events: [HuskyBackendEvent] = []
     var sequence: UInt64 = 0
     var submissions: [String: Submission] = [:]
@@ -46,7 +49,10 @@ public actor HuskyFixtureStore {
       $0.maximumMessageUtf8Bytes = 65_536
       $0.defaultHistoryPageSize = 50
       $0.maximumHistoryPageSize = 100
-      $0.features = ["typed-chat", "stream-resume", "history-pagination", "fixture"]
+      $0.features = [
+        "typed-chat", "stream-resume", "history-pagination", "partial_message_snapshots",
+        "fixture",
+      ]
     }
   }
 
@@ -106,7 +112,7 @@ public actor HuskyFixtureStore {
     guard !request.conversationID.isEmpty else {
       throw rpcError(.invalidArgument, "conversation_id must not be empty.")
     }
-    guard let conversation = conversations[request.conversationID] else {
+    guard var conversation = conversations[request.conversationID] else {
       throw rpcError(.failedPrecondition, "The requested fixture conversation does not exist.")
     }
     let pageSize = try normalizedPageSize(request.pageSize)
@@ -134,8 +140,22 @@ public actor HuskyFixtureStore {
 
     let start = max(0, before - pageSize)
     let page = Array(conversation.messages[start..<before])
+    let partialMessages: [HuskyPartialMessageState]
+    if request.beforeCursor.isEmpty {
+      partialMessages = Self.sortedPartialMessages(conversation.partialMessages)
+      if start > 0 {
+        Self.retainPartialSnapshot(
+          partialMessages, sequence: snapshotSequence, in: &conversation)
+      }
+    } else if let retained = conversation.partialSnapshotsBySequence[snapshotSequence] {
+      partialMessages = retained
+    } else {
+      throw rpcError(.invalidArgument, "The history snapshot has expired.")
+    }
+    conversations[request.conversationID] = conversation
     return .with {
       $0.messages = page
+      $0.partialMessages = partialMessages
       $0.hasMore_p = start > 0
       $0.nextCursor =
         start > 0
@@ -332,6 +352,9 @@ public actor HuskyFixtureStore {
     submission.generation = nil
     submission.isCancelled = true
     conversation.submissions[requestID] = submission
+    conversation.partialMessages = conversation.partialMessages.filter {
+      $0.value.message.requestID != requestID
+    }
     conversations[conversationID] = conversation
     emitStatus(.idle, requestID: requestID, conversationID: conversationID)
     let cancelled = appendEvent(
@@ -367,6 +390,13 @@ public actor HuskyFixtureStore {
         $0.sequence = startedSequence
       }
       updateSubmission(request.requestID, in: conversationID) { $0.assistantMessage = assistant }
+      if var current = conversations[conversationID] {
+        current.partialMessages[assistantMessageID] = .with {
+          $0.message = assistant
+          $0.revision = 0
+        }
+        conversations[conversationID] = current
+      }
       _ = appendEvent(
         .with {
           $0.messageStarted = .with {
@@ -388,6 +418,14 @@ public actor HuskyFixtureStore {
           !active.isCancelled
         else { return }
         accumulated += piece
+        if var current = conversations[conversationID],
+          var partial = current.partialMessages[assistantMessageID]
+        {
+          partial.message.text = accumulated
+          partial.revision = UInt64(index + 1)
+          current.partialMessages[assistantMessageID] = partial
+          conversations[conversationID] = current
+        }
         _ = appendEvent(
           .with {
             $0.textDelta = .with {
@@ -415,6 +453,7 @@ public actor HuskyFixtureStore {
       }
       if var finalRecord = conversations[conversationID] {
         finalRecord.messages.append(completed)
+        finalRecord.partialMessages.removeValue(forKey: assistantMessageID)
         conversations[conversationID] = finalRecord
       }
       _ = appendEvent(
@@ -438,6 +477,12 @@ public actor HuskyFixtureStore {
           $0.message = "The deterministic fixture script failed."
           $0.retryable = false
         }
+      }
+      if var current = conversations[conversationID] {
+        current.partialMessages = current.partialMessages.filter {
+          $0.value.message.requestID != request.requestID
+        }
+        conversations[conversationID] = current
       }
       publish(failed, to: conversationID)
     }
@@ -537,6 +582,25 @@ public actor HuskyFixtureStore {
     let size = requested == 0 ? 50 : Int(requested)
     guard size <= 100 else { throw rpcError(.invalidArgument, "page_size cannot exceed 100.") }
     return max(1, size)
+  }
+
+  private static func sortedPartialMessages(
+    _ messages: [String: HuskyPartialMessageState]
+  ) -> [HuskyPartialMessageState] {
+    messages.values.sorted { $0.message.messageID < $1.message.messageID }
+  }
+
+  private static func retainPartialSnapshot(
+    _ messages: [HuskyPartialMessageState], sequence: UInt64,
+    in conversation: inout Conversation
+  ) {
+    guard conversation.partialSnapshotsBySequence[sequence] == nil else { return }
+    conversation.partialSnapshotsBySequence[sequence] = messages
+    conversation.partialSnapshotOrder.append(sequence)
+    while conversation.partialSnapshotOrder.count > 16 {
+      let expired = conversation.partialSnapshotOrder.removeFirst()
+      conversation.partialSnapshotsBySequence.removeValue(forKey: expired)
+    }
   }
 
   private func nextMessageID() -> String {
