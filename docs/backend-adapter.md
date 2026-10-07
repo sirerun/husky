@@ -73,3 +73,10 @@ Conversation creation reuses a pending request ID/title within the live controll
 ambiguous failure. That create intent is not yet durable across application restarts; inspect
 the backend conversation list before creating again after restarting. Message submission IDs
 and payloads, separately, are persisted per conversation.
+
+The conformance fixture retains partial-state snapshots for the latest 16 history
+snapshot sequences per conversation. A cursor outside that retention window
+expires with `OUT_OF_RANGE`; fetch a fresh first page before continuing pagination.
+Production adapters must document retention and reject expired cursors explicitly,
+never combine pages from different snapshots. In the app, Reconnect reloads the
+selected conversation from a fresh snapshot.

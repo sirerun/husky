@@ -67,3 +67,9 @@ and presentation validators begin with these seeds; the next delta must strictly
 revision, and cumulative text still obeys the byte limit. An unseeded delta is a protocol error,
 not permission to guess prior text. Old servers remain wire-compatible but cannot qualify
 fresh-attach recovery during an in-progress message without this capability.
+
+Snapshot retention is bounded, not indefinite. Expired history cursors return
+`OUT_OF_RANGE`; the caller must obtain a new first-page snapshot. The fixture
+retains the latest 16 snapshot sequences for partial-state pagination. Revisions
+are strictly increasing but may jump; their numeric value is not constrained by
+the number of events since MessageStarted.
