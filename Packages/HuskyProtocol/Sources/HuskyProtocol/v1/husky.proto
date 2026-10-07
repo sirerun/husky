@@ -77,7 +77,7 @@ message GetHistoryResponse {
   uint64 snapshot_sequence = 4;
   // All in-progress messages at exactly snapshot_sequence, including outside this page.
   // Advertised by partial_message_snapshots; max 64 entries / 2 MiB total text.
-  repeated PartialMessageSnapshot partial_messages = 5;
+  repeated PartialMessageState partial_messages = 5;
 }
 
 enum MessageRole {
@@ -97,7 +97,7 @@ message ChatMessage {
   uint64 sequence = 7;
 }
 
-message PartialMessageSnapshot {
+message PartialMessageState {
   ChatMessage message = 1;
   uint64 revision = 2; // Last applied text revision; zero means no delta yet.
 }

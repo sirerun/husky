@@ -81,11 +81,25 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
       )
     }
     try HuskyHistoryValidator.validate(messages, snapshotSequence: response.snapshotSequence)
+    let partials = try response.partialMessages.map {
+      HuskyPartialMessageSnapshot(
+        message: try HuskyGRPCMapper.mapMessage(
+          $0.message, expectedConversationID: conversationID,
+          maximumMessageBytes: capabilities.maximumMessageUTF8Bytes), revision: $0.revision)
+    }
+    guard partials.isEmpty || capabilities.features.contains("partial_message_snapshots") else {
+      throw HuskyClientError.malformedResponse(
+        "backend did not advertise partial message snapshots")
+    }
+    _ = try HuskyMessageBodyValidator.seed(
+      partials, conversationID: conversationID,
+      afterSequence: response.snapshotSequence, maximumBytes: capabilities.maximumMessageUTF8Bytes)
     return HuskyHistoryPage(
       messages: messages,
       nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor,
       hasMore: response.hasMore_p,
-      snapshotSequence: response.snapshotSequence
+      snapshotSequence: response.snapshotSequence,
+      partialMessages: partials
     )
   }
 
@@ -94,16 +108,30 @@ public struct GRPCHuskyChatClient<Transport: ClientTransport>: HuskyChatClient {
     afterSequence: UInt64,
     resumeToken: String?
   ) async throws -> any HuskyConversationSession {
+    try await openConversation(
+      conversationID: conversationID, afterSequence: afterSequence,
+      resumeToken: resumeToken, partialMessages: [])
+  }
+
+  public func openConversation(
+    conversationID: String, afterSequence: UInt64, resumeToken: String?,
+    partialMessages: [HuskyPartialMessageSnapshot]
+  ) async throws -> any HuskyConversationSession {
     try HuskyGRPCMapper.validateIdentifier(conversationID)
     try HuskyGRPCMapper.validateDiagnostic(resumeToken ?? "", field: "resume token")
     let capabilities = try await self.getCapabilities()
+    let partialState = try HuskyMessageBodyValidator.seed(
+      partialMessages,
+      conversationID: conversationID, afterSequence: afterSequence,
+      maximumBytes: capabilities.maximumMessageUTF8Bytes)
     return GRPCHuskyConversationSession(
       backend: self.backend,
       metadata: metadata,
       conversationID: conversationID,
       afterSequence: afterSequence,
       resumeToken: resumeToken,
-      maximumMessageBytes: capabilities.maximumMessageUTF8Bytes
+      maximumMessageBytes: capabilities.maximumMessageUTF8Bytes,
+      partialState: partialState
     )
   }
 
@@ -403,7 +431,8 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
     conversationID: String,
     afterSequence: UInt64,
     resumeToken: String?,
-    maximumMessageBytes: UInt32
+    maximumMessageBytes: UInt32,
+    partialState: [String: HuskyMessageBodyValidator.PartialMessage]
   ) {
     let commandStream = HuskyCommandStream(capacity: 128)
     let eventBuffer = HuskyEventStreamBuffer(capacity: 128)
@@ -428,7 +457,7 @@ private final class GRPCHuskyConversationSession<Transport: ClientTransport>:
             try await writer.write(command)
           }
         } onResponse: { response in
-          var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
+          var partialMessages = partialState
           defer { partialMessages.removeAll() }
           for try await event in response.messages {
             do {
