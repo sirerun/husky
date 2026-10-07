@@ -54,7 +54,7 @@ Acceptance is stated under each task without requiring optional execution toolin
 
 ### E1 — native fidelity proof and API foundation (fidelity: executable) → docs/plans/E1.md (10/11)
 
-### E2 — complete generic chat client (fidelity: executable) → docs/plans/E2.md (0/15)
+### E2 — complete generic chat client (fidelity: executable) → docs/plans/E2.md (5/15)
 
 ### E3 — signed release and Sparkle updates (fidelity: outline) → docs/plans/E3.md (0/1)
 

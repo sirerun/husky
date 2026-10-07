@@ -1,6 +1,6 @@
 # E2 client interface and ownership
 
-Status: proposed 2026-10-06; implementation begins after independent plan review and source landing. Existing `husky.v1` wire messages and transport pins remain unchanged. Coordinator may correct a seam with affected workers before implementation; do not invent worker-local variants.
+Status: frozen 2026-10-06 after PR #5 independent review and landing at `ec984fb`. Existing `husky.v1` wire messages and transport pins remain unchanged. Coordinator may correct a seam with affected workers before implementation; do not invent worker-local variants.
 
 ## Ownership
 
