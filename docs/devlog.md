@@ -1,6 +1,11 @@
 # Husky devlog
 
 
+## 2026-10-06 — Continued delivery planning
+
+Reconciled PR #4 source landing at `c956db9` with still-open native acceptance. Split the growing plan into preserved epic files, expanded E2 into profile/credential/draft, conversation orchestration, authenticated transport, UI and native lifecycle lanes with explicit verification/review/merge/landed tasks. The shared E2 contract fixes ownership and interfaces before implementation. Independent audits confirmed no demonstrated drag source defect, a live display-change gap, missing E2 app wiring, and no signed packaging or updater source yet. Signing and publication readiness remain separate gates. This planning change does not claim new native checks or completed client/release behavior.
+
+
 ## 2026-10-05 — Session closeout and message direction styling
 
 Outgoing user bubbles now have an 8% accent fill and 22% accent outline; incoming bubbles keep their neutral material and 15% primary outline. Text, accessibility labels, alignment, and the 20% smaller panel/bubble geometry remain intact. Strict Swift formatting and patch validation pass. The owner requested source merge and knowledge banking for session shutdown; native drag/restore and the other unverified product/release acceptance gates remain open. Final verification and landing evidence will be recorded in the closeout handoff.
