@@ -124,7 +124,9 @@ private final class HuskyUnconfiguredChatClient: HuskyChatPanelClient {
 
   func statusUpdates() -> AsyncStream<String?> {
     AsyncStream { continuation in
-      continuation.yield(nil)
+      continuation.yield(
+        "Saved connection settings could not be opened. Check local storage and Keychain access, then restart Husky."
+      )
       continuation.finish()
     }
   }

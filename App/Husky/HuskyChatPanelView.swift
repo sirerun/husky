@@ -197,6 +197,7 @@ struct HuskyChatPanelView: View {
           LazyVStack(alignment: .leading, spacing: 18 * HuskyPanelLayout.sizeScale) {
             if let live = model.liveClient, live.conversation.hasMoreHistory {
               Button("Load older messages") {
+                isAtBottom = false
                 let anchor = model.messages.first?.id
                 Task {
                   await live.conversation.loadOlderMessages()
@@ -273,11 +274,15 @@ struct HuskyChatPanelView: View {
         .onPreferenceChange(HuskyTranscriptHeightKey.self) { contentBottom in
           isAtBottom = contentBottom <= viewport.size.height + 20
         }
-        .onChange(of: model.messages.count) { _, _ in
+        .onChange(of: model.messages) { _, _ in
           guard isAtBottom else { return }
           withAnimation(.easeOut(duration: 0.18)) {
             scrollProxy.scrollTo(HuskyChatPanelView.bottomAnchor, anchor: .bottom)
           }
+        }
+        .onChange(of: model.liveClient?.conversation.selectedConversationID) { _, _ in
+          isAtBottom = true
+          scrollProxy.scrollTo(HuskyChatPanelView.bottomAnchor, anchor: .bottom)
         }
         .onAppear {
           scrollProxy.scrollTo(HuskyChatPanelView.bottomAnchor, anchor: .bottom)
@@ -308,7 +313,11 @@ struct HuskyChatPanelView: View {
           .contentShape(Circle())
       }
       .buttonStyle(.plain)
-      .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isSending)
+      .disabled(
+        draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isSending
+          || (model.liveClient != nil
+            && model.liveClient?.conversation.selectedConversationID == nil)
+      )
       .accessibilityLabel(
         model.liveClient?.draft.pendingRequestID == nil ? "Send message" : "Retry pending message"
       )
