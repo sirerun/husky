@@ -145,12 +145,13 @@ public actor HuskyFixtureStore {
       partialMessages = Self.sortedPartialMessages(conversation.partialMessages)
       if start > 0 {
         Self.retainPartialSnapshot(
-          partialMessages, sequence: snapshotSequence, in: &conversation)
+          partialMessages, sequence: snapshotSequence,
+          maximumSnapshots: configuration.retainedHistorySnapshotLimit, in: &conversation)
       }
     } else if let retained = conversation.partialSnapshotsBySequence[snapshotSequence] {
       partialMessages = retained
     } else {
-      throw rpcError(.invalidArgument, "The history snapshot has expired.")
+      throw rpcError(.outOfRange, "The history cursor's snapshot has expired.")
     }
     conversations[request.conversationID] = conversation
     return .with {
@@ -417,6 +418,9 @@ public actor HuskyFixtureStore {
           let active = current.submissions[request.requestID], !active.isComplete,
           !active.isCancelled
         else { return }
+        if configuration.failAfterFirstPartialDelta, index == 1 {
+          throw FixtureGenerationError.injectedFailure
+        }
         accumulated += piece
         if var current = conversations[conversationID],
           var partial = current.partialMessages[assistantMessageID]
@@ -482,9 +486,14 @@ public actor HuskyFixtureStore {
         current.partialMessages = current.partialMessages.filter {
           $0.value.message.requestID != request.requestID
         }
+        if var failedSubmission = current.submissions[request.requestID] {
+          failedSubmission.isComplete = true
+          failedSubmission.generation = nil
+          current.submissions[request.requestID] = failedSubmission
+        }
         conversations[conversationID] = current
       }
-      publish(failed, to: conversationID)
+      _ = appendEvent(failed, to: conversationID)
     }
   }
 
@@ -591,16 +600,20 @@ public actor HuskyFixtureStore {
   }
 
   private static func retainPartialSnapshot(
-    _ messages: [HuskyPartialMessageState], sequence: UInt64,
+    _ messages: [HuskyPartialMessageState], sequence: UInt64, maximumSnapshots: Int,
     in conversation: inout Conversation
   ) {
     guard conversation.partialSnapshotsBySequence[sequence] == nil else { return }
     conversation.partialSnapshotsBySequence[sequence] = messages
     conversation.partialSnapshotOrder.append(sequence)
-    while conversation.partialSnapshotOrder.count > 16 {
+    while conversation.partialSnapshotOrder.count > maximumSnapshots {
       let expired = conversation.partialSnapshotOrder.removeFirst()
       conversation.partialSnapshotsBySequence.removeValue(forKey: expired)
     }
+  }
+
+  private enum FixtureGenerationError: Error {
+    case injectedFailure
   }
 
   private func nextMessageID() -> String {

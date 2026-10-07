@@ -7,6 +7,127 @@ import HuskyProtocol
 import XCTest
 
 final class HuskyPartialRecoveryTransportTests: XCTestCase, @unchecked Sendable {
+  func testAsynchronousGenerationFailureHasAReplayableSequence() async throws {
+    let transport = InProcessTransport()
+    let service = HuskyFixtureService(
+      store: HuskyFixtureStore(
+        configuration: .init(
+          responseStepDelay: .seconds(1), failAfterFirstPartialDelta: true)))
+    let server = GRPCServer(transport: transport.server, services: [service])
+    let serverTask = Task { try await server.serve() }
+    defer { serverTask.cancel() }
+
+    try await withGRPCClient(transport: transport.client) { client in
+      let api = GRPCHuskyChatClient(backend: HuskyHuskyBackend.Client(wrapping: client))
+      let conversation = try await api.createConversation(
+        requestID: "failure-create", title: "Failure replay")
+      let initial = try await api.getHistory(
+        conversationID: conversation.id, pageSize: 100, before: nil)
+      let session = try await api.openConversation(
+        conversationID: conversation.id, afterSequence: initial.snapshotSequence,
+        resumeToken: nil, partialMessages: initial.partialMessages)
+      let recorder = PartialRecoveryRecorder()
+      let streamTask = Task {
+        for try await event in session.events { await recorder.append(event) }
+      }
+      try await session.submit(requestID: "failure-request", text: "fail after delta")
+
+      let delta = try await waitForEvent(in: recorder) { event in
+        if case .textDelta(_, _, let revision, _, _) = event.event { return revision == 1 }
+        return false
+      }
+      let partialSnapshot = try await api.getHistory(
+        conversationID: conversation.id, pageSize: 100, before: nil)
+      XCTAssertEqual(partialSnapshot.snapshotSequence, delta.sequence)
+      XCTAssertEqual(partialSnapshot.partialMessages.first?.revision, 1)
+
+      let failed = try await waitForEvent(in: recorder) { event in
+        if case .requestFailed(let requestID, _, _, _) = event.event {
+          return requestID == "failure-request"
+        }
+        return false
+      }
+      XCTAssertGreaterThan(failed.sequence, delta.sequence)
+      let failedHistory = try await api.getHistory(
+        conversationID: conversation.id, pageSize: 100, before: nil)
+      XCTAssertEqual(failedHistory.snapshotSequence, failed.sequence)
+      XCTAssertTrue(failedHistory.partialMessages.isEmpty)
+      await session.end()
+      try await streamTask.value
+
+      let resumed = try await api.openConversation(
+        conversationID: conversation.id, afterSequence: delta.sequence,
+        resumeToken: nil, partialMessages: partialSnapshot.partialMessages)
+      let resumedRecorder = PartialRecoveryRecorder()
+      let resumedTask = Task {
+        for try await event in resumed.events { await resumedRecorder.append(event) }
+      }
+      let replayedFailure = try await waitForEvent(in: resumedRecorder) { event in
+        if case .requestFailed(let requestID, _, _, _) = event.event {
+          return requestID == "failure-request"
+        }
+        return false
+      }
+      XCTAssertEqual(replayedFailure, failed)
+      await resumed.end()
+      try await resumedTask.value
+    }
+  }
+
+  func testExpiredPartialHistoryCursorReturnsOutOfRange() async throws {
+    let transport = InProcessTransport()
+    let service = HuskyFixtureService(
+      store: HuskyFixtureStore(
+        configuration: .init(responseStepDelay: .zero, retainedHistorySnapshotLimit: 1)))
+    let server = GRPCServer(transport: transport.server, services: [service])
+    let serverTask = Task { try await server.serve() }
+    defer { serverTask.cancel() }
+
+    try await withGRPCClient(transport: transport.client) { client in
+      let api = GRPCHuskyChatClient(backend: HuskyHuskyBackend.Client(wrapping: client))
+      let conversation = try await api.createConversation(
+        requestID: "cursor-expiry-create", title: "History cursor expiry")
+      let session = try await api.openConversation(
+        conversationID: conversation.id, afterSequence: 0, resumeToken: nil)
+      let recorder = PartialRecoveryRecorder()
+      let streamTask = Task {
+        for try await event in session.events { await recorder.append(event) }
+      }
+
+      try await session.submit(requestID: "cursor-first", text: "first")
+      _ = try await waitForEvent(in: recorder) { event in
+        if case .messageCompleted(let requestID, _) = event.event {
+          return requestID == "cursor-first"
+        }
+        return false
+      }
+      let firstSnapshot = try await api.getHistory(
+        conversationID: conversation.id, pageSize: 1, before: nil)
+      let expiredCursor = try XCTUnwrap(firstSnapshot.nextCursor)
+
+      try await session.submit(requestID: "cursor-second", text: "second")
+      _ = try await waitForEvent(in: recorder) { event in
+        if case .messageCompleted(let requestID, _) = event.event {
+          return requestID == "cursor-second"
+        }
+        return false
+      }
+      let secondSnapshot = try await api.getHistory(
+        conversationID: conversation.id, pageSize: 1, before: nil)
+      XCTAssertNotEqual(secondSnapshot.snapshotSequence, firstSnapshot.snapshotSequence)
+
+      do {
+        _ = try await api.getHistory(
+          conversationID: conversation.id, pageSize: 1, before: expiredCursor)
+        XCTFail("an evicted partial-history snapshot cursor should be out of range")
+      } catch let error as RPCError {
+        XCTAssertEqual(error.code, .outOfRange)
+      }
+      await session.end()
+      try await streamTask.value
+    }
+  }
+
   func testFixtureSnapshotSeedsMidMessageReplay() async throws {
     let transport = InProcessTransport()
     let service = HuskyFixtureService(
