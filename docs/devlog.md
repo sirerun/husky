@@ -139,7 +139,8 @@ Create retry ID/title is retained within a live controller, but not across
 application restart; adapter documentation states that limitation. Typed-message
 pending ID/payload remains durable per profile/conversation.
 
-Source review is being finalized. Native acceptance remains blocked by the
+Independent Luna source review PASS at `e3b7232` against `ec984fb`, including
+all final fixture corrections. Native acceptance remains blocked by the
 locked Mac session; no additional CUA attempts or unlock action is pending.
 PR #6 remains draft and unmerged. Main's planning PR #5 is landed at `ec984fb`;
 the primary checkout was fast-forwarded cleanly to that revision.
