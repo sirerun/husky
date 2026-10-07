@@ -122,3 +122,24 @@ partial text/revision snapshots and seed propagation through both transport and
 controller validators. It prevents guessing state when attaching during an
 in-progress message. These changes need a fresh integrated test result and
 independent review; the 77-test result does not cover them. PR #6 remains draft.
+
+## Complete E2 source test gate — 2026-10-06
+
+Fresh `swift test --jobs 2 --cache-path .build/package-cache` passed at
+`e3b723297b9711cc70380277b14a9f479ef34270`: 65 core + 14 fixture/auth/recovery +
+9 geometry = 88 tests. The shared lease was acquired only below load 10 and
+released immediately afterward. The app and fixture products compiled in this
+run. The additive partial snapshot path is covered over in-process real gRPC,
+including seeded replay, missing baseline, revision/cumulative byte rejection,
+canonical completion, sequenced asynchronous failure and cursor expiry.
+
+Independent review drove replay-ack, create-retry, pagination/resync, reconnect
+state, corrupted-preferences recovery and asynchronous fixture-failure fixes.
+Create retry ID/title is retained within a live controller, but not across
+application restart; adapter documentation states that limitation. Typed-message
+pending ID/payload remains durable per profile/conversation.
+
+Source review is being finalized. Native acceptance remains blocked by the
+locked Mac session; no additional CUA attempts or unlock action is pending.
+PR #6 remains draft and unmerged. Main's planning PR #5 is landed at `ec984fb`;
+the primary checkout was fast-forwarded cleanly to that revision.
