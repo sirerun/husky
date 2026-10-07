@@ -96,9 +96,11 @@ final class HuskyConversationControllerTests: XCTestCase {
     XCTAssertEqual(
       resumed.last?.partialMessages,
       [
-        Self.partialMessage(
-          id: "m-partial", conversationID: "c-1", text: "hello world", sequence: 6,
-          requestID: "req-partial", revision: 3)
+        HuskyPartialMessageSnapshot(
+          message: HuskyMessage(
+            id: "m-partial", conversationID: "c-1", role: .assistant,
+            text: "hello world", createdAt: partial.message.createdAt,
+            requestID: "req-partial", sequence: 6), revision: 3)
       ])
   }
 

@@ -44,7 +44,9 @@ final class HuskyPartialRecoveryTransportTests: XCTestCase, @unchecked Sendable 
       try await firstSession.submit(requestID: "partial-recovery-request", text: "seed this")
 
       let firstDelta = try await waitForEvent(in: firstRecorder) { event in
-        if case .textDelta(_, _, let revision, _, _) = event.event { return revision == 1 }
+        if case .textDelta(let requestID, _, let revision, _, _) = event.event {
+          return requestID == "partial-recovery-request" && revision == 1
+        }
         return false
       }
       let snapshot = try await api.getHistory(
