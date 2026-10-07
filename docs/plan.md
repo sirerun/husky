@@ -52,7 +52,7 @@ Acceptance is stated under each task without requiring optional execution toolin
 
 ### E0 — reviewed project bootstrap (fidelity: executable) → docs/plans/E0.md (11/11)
 
-### E1 — native fidelity proof and API foundation (fidelity: executable) → docs/plans/E1.md (9/11)
+### E1 — native fidelity proof and API foundation (fidelity: executable) → docs/plans/E1.md (10/11)
 
 ### E2 — complete generic chat client (fidelity: executable) → docs/plans/E2.md (0/15)
 
