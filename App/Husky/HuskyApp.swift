@@ -46,6 +46,12 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
     configureStatusItem()
   }
 
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
+  {
+    panelController?.show()
+    return true
+  }
+
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     false
   }

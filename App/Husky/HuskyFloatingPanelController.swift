@@ -32,6 +32,7 @@ final class HuskyFloatingPanelController {
       backing: .buffered,
       defer: false
     )
+    panel.title = "Husky"
     panel.isFloatingPanel = true
     panel.level = .floating
     panel.backgroundColor = .clear

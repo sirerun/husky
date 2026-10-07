@@ -165,9 +165,10 @@ final class HuskyConversationControllerTests: XCTestCase {
     let completedResponse = HuskyMessage(
       id: "m-response", conversationID: "c-1", role: .assistant, text: "done",
       createdAt: Date(timeIntervalSince1970: 2), requestID: "req-1", sequence: 1)
-    session.emit(.init(
-      sequence: 1,
-      event: .messageCompleted(requestID: "req-1", message: completedResponse)))
+    session.emit(
+      .init(
+        sequence: 1,
+        event: .messageCompleted(requestID: "req-1", message: completedResponse)))
     await self.waitUntil { controller.messages.contains(where: { $0.id == "m-response" }) }
 
     let changedCompletedPayload = await controller.submitResult(
@@ -248,16 +249,19 @@ final class HuskyConversationControllerTests: XCTestCase {
 
     let olderLoad = Task { @MainActor in await controller.loadOlderMessages() }
     await self.waitUntil { await pageGate.hasPendingRequest() }
-    firstSession.emit(.init(
-      sequence: 0,
-      event: .sessionReady(conversationID: "c-1", caughtUpThrough: 2, resumeToken: nil)))
+    firstSession.emit(
+      .init(
+        sequence: 0,
+        event: .sessionReady(conversationID: "c-1", caughtUpThrough: 2, resumeToken: nil)))
     await self.waitUntil { controller.isConnected }
-    firstSession.emit(.init(
-      sequence: 4, event: .statusChanged(requestID: nil, status: .typing, detail: "gap")))
+    firstSession.emit(
+      .init(
+        sequence: 4, event: .statusChanged(requestID: nil, status: .typing, detail: "gap")))
     await self.waitUntil { await client.openRequests().count == 2 }
-    await pageGate.release(.init(
-      messages: [Self.message("m-0", "stale older page", sequence: 1)], nextCursor: "older-2",
-      hasMore: true, snapshotSequence: 2))
+    await pageGate.release(
+      .init(
+        messages: [Self.message("m-0", "stale older page", sequence: 1)], nextCursor: "older-2",
+        hasMore: true, snapshotSequence: 2))
     await olderLoad.value
 
     XCTAssertEqual(controller.messages.map(\.id), ["m-1", "m-2"])
@@ -293,9 +297,10 @@ final class HuskyConversationControllerTests: XCTestCase {
     await controller.reconnect()
 
     XCTAssertFalse(controller.isLoadingHistory)
-    await pageGate.release(.init(
-      messages: [Self.message("m-0", "old page", sequence: 1)], nextCursor: nil,
-      hasMore: false, snapshotSequence: 1))
+    await pageGate.release(
+      .init(
+        messages: [Self.message("m-0", "old page", sequence: 1)], nextCursor: nil,
+        hasMore: false, snapshotSequence: 1))
     await olderLoad.value
     XCTAssertFalse(controller.isLoadingHistory)
   }
