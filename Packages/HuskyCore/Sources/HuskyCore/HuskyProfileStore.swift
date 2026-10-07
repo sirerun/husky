@@ -246,7 +246,7 @@ public enum HuskyProfileStoreError: Error, Sendable, Equatable, LocalizedError {
 
 @MainActor
 protocol HuskyProfilePreferencesBacking: AnyObject {
-  func load() -> Data?
+  func load() throws -> Data?
   func save(_ data: Data?) throws
 }
 
@@ -259,8 +259,12 @@ private final class UserDefaultsHuskyProfilePreferences: HuskyProfilePreferences
     self.defaults = defaults
   }
 
-  func load() -> Data? {
-    self.defaults.data(forKey: self.key)
+  func load() throws -> Data? {
+    guard let rawValue = self.defaults.object(forKey: self.key) else { return nil }
+    guard let data = rawValue as? Data else {
+      throw HuskyProfileStoreError.invalidPreferences
+    }
+    return data
   }
 
   func save(_ data: Data?) throws {
@@ -294,8 +298,13 @@ public final class HuskyProfileStore {
   /// Invoke only after the user confirms the recovery explanation in the UI.
   /// Raw preference bytes are retained under a unique key; credentials are untouched.
   public static func recoverPreferences(defaults: UserDefaults = .standard) throws {
-    guard let original = defaults.data(forKey: Self.preferencesKey) else {
+    guard let rawValue = defaults.object(forKey: Self.preferencesKey) else {
       throw HuskyProfileStoreError.noPreferencesToRecover
+    }
+    guard let original = rawValue as? Data else {
+      // Keep an unexpected property-list value in place. Recovery only moves
+      // byte-encoded preferences, whose contents can be verified losslessly.
+      throw HuskyProfileStoreError.invalidPreferences
     }
 
     var backupKey: String?
@@ -346,7 +355,7 @@ public final class HuskyProfileStore {
     self.preferences = preferences
     self.credentials = credentials
 
-    if let data = preferences.load() {
+    if let data = try preferences.load() {
       let header: PreferencesVersion
       do {
         header = try JSONDecoder().decode(PreferencesVersion.self, from: data)
@@ -539,7 +548,7 @@ public final class HuskyProfileStore {
     } catch {
       throw HuskyProfileStoreError.preferencesWriteFailed
     }
-    let previousData = self.preferences.load()
+    let previousData = try self.preferences.load()
     do {
       try self.preferences.save(data)
     } catch {

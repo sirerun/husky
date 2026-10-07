@@ -294,6 +294,22 @@ final class HuskyProfileStoreTests: XCTestCase {
     }
   }
 
+  func testNonDataUserDefaultsPreferencesFailClosed() throws {
+    let suite = "HuskyProfileStoreNonDataTests-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defaults.removePersistentDomain(forName: suite)
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let original: [String: String] = ["preserve": "this value"]
+    defaults.set(original, forKey: Self.preferencesKey)
+
+    XCTAssertThrowsError(
+      try HuskyProfileStore(defaults: defaults, credentials: FakeCredentialStore())
+    ) {
+      XCTAssertEqual($0 as? HuskyProfileStoreError, .invalidPreferences)
+    }
+    XCTAssertEqual(defaults.dictionary(forKey: Self.preferencesKey) as? [String: String], original)
+  }
+
   func testExplicitRecoveryKeepsRawBytesUnderNewBackupAndPreservesOldBackups() throws {
     let suite = "HuskyProfileRecoveryTests-\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -325,7 +341,7 @@ final class HuskyProfileStoreTests: XCTestCase {
     defaults.set("preserve this value", forKey: Self.preferencesKey)
 
     XCTAssertThrowsError(try HuskyProfileStore.recoverPreferences(defaults: defaults)) {
-      XCTAssertEqual($0 as? HuskyProfileStoreError, .noPreferencesToRecover)
+      XCTAssertEqual($0 as? HuskyProfileStoreError, .invalidPreferences)
     }
     XCTAssertEqual(defaults.string(forKey: Self.preferencesKey), "preserve this value")
     XCTAssertTrue(HuskyProfileStore.recoveryBackupKeys(defaults: defaults).isEmpty)
@@ -406,7 +422,7 @@ private final class FakePreferencesBacking: HuskyProfilePreferencesBacking {
     self.data = data
   }
 
-  func load() -> Data? {
+  func load() throws -> Data? {
     self.data
   }
 
