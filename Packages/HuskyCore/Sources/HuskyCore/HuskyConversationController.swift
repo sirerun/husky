@@ -604,7 +604,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       guard self.generation == generation else { return }
       self.isLoading = false
       self.isConnected = false
-      self.statusText = Self.isUnsupportedPartialRecoveryAdapter(error)
+      self.statusText =
+        Self.isUnsupportedPartialRecoveryAdapter(error)
         ? "The in-progress reply cannot be resumed safely by this client. Reconnect after it finishes or select another conversation."
         : "The conversation could not reconnect. Select Reconnect to try again."
     }
@@ -808,7 +809,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       byID[message.id] = message
     }
     let pageIDs = Set(page.messages.map(\.id))
-    for oldID in self.partialMessages.keys where seededPartials[oldID] == nil && !pageIDs.contains(oldID) {
+    for oldID in self.partialMessages.keys
+    where seededPartials[oldID] == nil && !pageIDs.contains(oldID) {
       byID.removeValue(forKey: oldID)
     }
     for partial in page.partialMessages {
@@ -842,7 +844,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
   ) throws -> [HuskyPartialMessageSnapshot] {
     let snapshots = try self.partialMessages.map { id, partial -> HuskyPartialMessageSnapshot in
       guard let message = self.messages.first(where: { $0.id == id }) else {
-        throw HuskyClientError.malformedResponse("partial message is missing from displayed history")
+        throw HuskyClientError.malformedResponse(
+          "partial message is missing from displayed history")
       }
       return HuskyPartialMessageSnapshot(
         message: HuskyMessage(

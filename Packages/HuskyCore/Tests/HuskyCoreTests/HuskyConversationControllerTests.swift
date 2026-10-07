@@ -74,15 +74,17 @@ final class HuskyConversationControllerTests: XCTestCase {
     let firstOpens = await client.openRequests()
     XCTAssertEqual(firstOpens.first?.partialMessages, [partial])
 
-    firstSession.emit(.init(
-      sequence: 0,
-      event: .sessionReady(conversationID: "c-1", caughtUpThrough: 5, resumeToken: "resume-5")))
+    firstSession.emit(
+      .init(
+        sequence: 0,
+        event: .sessionReady(conversationID: "c-1", caughtUpThrough: 5, resumeToken: "resume-5")))
     await self.waitUntil { controller.isConnected }
-    firstSession.emit(.init(
-      sequence: 6,
-      event: .textDelta(
-        requestID: "req-partial", messageID: "m-partial", revision: 3,
-        append: " world", replace: nil)))
+    firstSession.emit(
+      .init(
+        sequence: 6,
+        event: .textDelta(
+          requestID: "req-partial", messageID: "m-partial", revision: 3,
+          append: " world", replace: nil)))
     await self.waitUntil { controller.messages.first?.text == "hello world" }
 
     await controller.reconnect()
@@ -93,9 +95,11 @@ final class HuskyConversationControllerTests: XCTestCase {
     XCTAssertEqual(resumed.last?.resumeToken, "resume-5")
     XCTAssertEqual(
       resumed.last?.partialMessages,
-      [Self.partialMessage(
-        id: "m-partial", conversationID: "c-1", text: "hello world", sequence: 6,
-        requestID: "req-partial", revision: 3)])
+      [
+        Self.partialMessage(
+          id: "m-partial", conversationID: "c-1", text: "hello world", sequence: 6,
+          requestID: "req-partial", revision: 3)
+      ])
   }
 
   @MainActor
@@ -126,23 +130,26 @@ final class HuskyConversationControllerTests: XCTestCase {
       operationTimeout: .seconds(1), acceptanceTimeout: .milliseconds(80),
       cleanupTimeout: .milliseconds(30))
     await controller.attach(profileID: UUID(), client: client)
-    firstSession.emit(.init(
-      sequence: 0,
-      event: .sessionReady(conversationID: "c-1", caughtUpThrough: 4, resumeToken: nil)))
+    firstSession.emit(
+      .init(
+        sequence: 0,
+        event: .sessionReady(conversationID: "c-1", caughtUpThrough: 4, resumeToken: nil)))
     await self.waitUntil { controller.isConnected }
 
-    firstSession.emit(.init(
-      sequence: 6, event: .statusChanged(requestID: nil, status: .typing, detail: "gap")))
+    firstSession.emit(
+      .init(
+        sequence: 6, event: .statusChanged(requestID: nil, status: .typing, detail: "gap")))
     await self.waitUntil { await client.openRequests().count == 2 }
 
     XCTAssertEqual(controller.messages.first?.text, "canonical body")
     let opens = await client.openRequests()
     XCTAssertEqual(opens.last?.partialMessages, [refreshedPartial])
-    secondSession.emit(.init(
-      sequence: 6,
-      event: .textDelta(
-        requestID: "req-partial", messageID: "m-partial", revision: 5,
-        append: " after refresh", replace: nil)))
+    secondSession.emit(
+      .init(
+        sequence: 6,
+        event: .textDelta(
+          requestID: "req-partial", messageID: "m-partial", revision: 5,
+          append: " after refresh", replace: nil)))
     await self.waitUntil { controller.messages.first?.text == "canonical body after refresh" }
   }
 
@@ -161,11 +168,12 @@ final class HuskyConversationControllerTests: XCTestCase {
       cleanupTimeout: .milliseconds(30))
     await controller.attach(profileID: UUID(), client: client)
 
-    session.emit(.init(
-      sequence: 1,
-      event: .textDelta(
-        requestID: "req-unseeded", messageID: "m-unseeded", revision: 1,
-        append: "partial", replace: nil)))
+    session.emit(
+      .init(
+        sequence: 1,
+        event: .textDelta(
+          requestID: "req-unseeded", messageID: "m-unseeded", revision: 1,
+          append: "partial", replace: nil)))
     await self.waitUntil { controller.statusText?.contains("Automatic recovery is paused") == true }
 
     let opens = await client.openRequests()
@@ -192,9 +200,10 @@ final class HuskyConversationControllerTests: XCTestCase {
       await self.waitUntil(timeout: .seconds(5)) {
         await client.openRequests().count == index + 1
       }
-      sessions[index].emit(.init(
-        sequence: 0,
-        event: .sessionReady(conversationID: "c-1", caughtUpThrough: 0, resumeToken: nil)))
+      sessions[index].emit(
+        .init(
+          sequence: 0,
+          event: .sessionReady(conversationID: "c-1", caughtUpThrough: 0, resumeToken: nil)))
       sessions[index].finishEvents()
       if index < sessions.count - 1 {
         await self.waitUntil(timeout: .seconds(5)) {
@@ -667,10 +676,11 @@ private actor ControlledChatClient: HuskyChatClient {
   private var conversationPages: [String: HuskyConversationPage]
   private var historyPages: [String: [HuskyHistoryPage]]
   private var sessions: [ControlledSession]
-  private var opened: [(
-    conversationID: String, afterSequence: UInt64, resumeToken: String?,
-    partialMessages: [HuskyPartialMessageSnapshot]
-  )] = []
+  private var opened:
+    [(
+      conversationID: String, afterSequence: UInt64, resumeToken: String?,
+      partialMessages: [HuskyPartialMessageSnapshot]
+    )] = []
   private var createdCount = 0
   private var createFailuresRemaining = 0
   private var creates: [(requestID: String, title: String)] = []
