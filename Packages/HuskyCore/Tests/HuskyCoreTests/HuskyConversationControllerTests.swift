@@ -111,7 +111,10 @@ final class HuskyConversationControllerTests: XCTestCase {
       .init(sequence: 3, event: .statusChanged(requestID: nil, status: .typing, detail: "")))
     await self.waitUntil { await client.openRequests().count == 2 }
 
-    XCTAssertEqual(controller.messages.map(\.id), ["m-2"])
+    // The refresh is a paginated snapshot. It updates the current page while
+    // retaining already loaded older rows that are outside this page.
+    XCTAssertEqual(controller.messages.map(\.id), ["m-1", "m-2"])
+    XCTAssertEqual(controller.messages.last?.text, "canonical")
     let opens = await client.openRequests()
     XCTAssertEqual(opens.last?.afterSequence, 2)
     XCTAssertNil(opens.last?.resumeToken)
@@ -150,14 +153,183 @@ final class HuskyConversationControllerTests: XCTestCase {
     await self.waitUntil { await session.submissions().count == 2 }
     session.emit(
       .init(
-        sequence: 1,
+        sequence: 0,
         event: .messageAccepted(
           requestID: "req-1", userMessage: Self.message("m-user", "hello", sequence: 1),
           replayed: true)))
 
     let retryResult = await retry.value
     XCTAssertEqual(retryResult, .accepted)
-    XCTAssertEqual(controller.activeRequestID, "req-1")
+    XCTAssertNil(controller.activeRequestID)
+
+    let completedResponse = HuskyMessage(
+      id: "m-response", conversationID: "c-1", role: .assistant, text: "done",
+      createdAt: Date(timeIntervalSince1970: 2), requestID: "req-1", sequence: 1)
+    session.emit(.init(
+      sequence: 1,
+      event: .messageCompleted(requestID: "req-1", message: completedResponse)))
+    await self.waitUntil { controller.messages.contains(where: { $0.id == "m-response" }) }
+
+    let changedCompletedPayload = await controller.submitResult(
+      text: "changed after completion", requestID: "req-1")
+    XCTAssertEqual(changedCompletedPayload, .rejected)
+    let completedSubmissions = await session.submissions().count
+    XCTAssertEqual(completedSubmissions, 2)
+  }
+
+  @MainActor
+  func testReplayedAcceptanceDoesNotBlockANewSubmission() async {
+    let session = ControlledSession()
+    let client = ControlledChatClient(
+      conversations: .init(
+        conversations: [Self.conversation("c-1")], nextCursor: nil, hasMore: false),
+      histories: [
+        "c-1|": [
+          .init(
+            messages: [Self.message("m-completed", "finished", sequence: 1)], nextCursor: nil,
+            hasMore: false, snapshotSequence: 1)
+        ]
+      ],
+      sessions: [session])
+    let controller = HuskyConversationController(
+      operationTimeout: .seconds(1), acceptanceTimeout: .seconds(1),
+      cleanupTimeout: .milliseconds(30))
+    await controller.attach(profileID: UUID(), client: client)
+
+    session.emit(
+      .init(
+        sequence: 0,
+        event: .messageAccepted(
+          requestID: "req-completed",
+          userMessage: Self.message("m-completed", "finished", sequence: 1),
+          replayed: true)))
+    await self.waitUntil { controller.messages.contains(where: { $0.id == "m-completed" }) }
+    XCTAssertNil(controller.activeRequestID)
+
+    let submission = Task { @MainActor in
+      await controller.submitResult(text: "next", requestID: "req-next")
+    }
+    await self.waitUntil { await session.submissions().count == 1 }
+    session.emit(
+      .init(
+        sequence: 2,
+        event: .messageAccepted(
+          requestID: "req-next", userMessage: Self.message("m-next", "next", sequence: 2),
+          replayed: false)))
+
+    let result = await submission.value
+    XCTAssertEqual(result, .accepted)
+    XCTAssertEqual(controller.activeRequestID, "req-next")
+  }
+
+  @MainActor
+  func testOlderPageFromBeforeResyncCannotOverwriteFreshSnapshot() async {
+    let firstSession = ControlledSession()
+    let secondSession = ControlledSession()
+    let pageGate = HistoryPageGate()
+    let client = ControlledChatClient(
+      conversations: .init(
+        conversations: [Self.conversation("c-1")], nextCursor: nil, hasMore: false),
+      histories: [
+        "c-1|": [
+          .init(
+            messages: [Self.message("m-1", "old snapshot", sequence: 2)], nextCursor: "older",
+            hasMore: true, snapshotSequence: 2),
+          .init(
+            messages: [Self.message("m-2", "fresh snapshot", sequence: 3)], nextCursor: nil,
+            hasMore: false, snapshotSequence: 3),
+        ]
+      ],
+      sessions: [firstSession, secondSession], olderHistoryGate: pageGate)
+    let controller = HuskyConversationController(
+      operationTimeout: .seconds(1), acceptanceTimeout: .milliseconds(80),
+      cleanupTimeout: .milliseconds(30))
+    await controller.attach(profileID: UUID(), client: client)
+
+    let olderLoad = Task { @MainActor in await controller.loadOlderMessages() }
+    await self.waitUntil { await pageGate.hasPendingRequest() }
+    firstSession.emit(.init(
+      sequence: 0,
+      event: .sessionReady(conversationID: "c-1", caughtUpThrough: 2, resumeToken: nil)))
+    await self.waitUntil { controller.isConnected }
+    firstSession.emit(.init(
+      sequence: 4, event: .statusChanged(requestID: nil, status: .typing, detail: "gap")))
+    await self.waitUntil { await client.openRequests().count == 2 }
+    await pageGate.release(.init(
+      messages: [Self.message("m-0", "stale older page", sequence: 1)], nextCursor: "older-2",
+      hasMore: true, snapshotSequence: 2))
+    await olderLoad.value
+
+    XCTAssertEqual(controller.messages.map(\.id), ["m-1", "m-2"])
+    XCTAssertEqual(controller.messages.last?.text, "fresh snapshot")
+    XCTAssertFalse(controller.hasMoreHistory)
+  }
+
+  @MainActor
+  func testReconnectResetsHistoryLoadingWhileOldPageIsPending() async {
+    let firstSession = ControlledSession()
+    let secondSession = ControlledSession()
+    let pageGate = HistoryPageGate()
+    let client = ControlledChatClient(
+      conversations: .init(
+        conversations: [Self.conversation("c-1")], nextCursor: nil, hasMore: false),
+      histories: [
+        "c-1|": [
+          .init(
+            messages: [Self.message("m-1", "message", sequence: 1)], nextCursor: "older",
+            hasMore: true, snapshotSequence: 1)
+        ]
+      ],
+      sessions: [firstSession, secondSession], olderHistoryGate: pageGate)
+    let controller = HuskyConversationController(
+      operationTimeout: .seconds(1), acceptanceTimeout: .milliseconds(80),
+      cleanupTimeout: .milliseconds(30))
+    await controller.attach(profileID: UUID(), client: client)
+
+    let olderLoad = Task { @MainActor in await controller.loadOlderMessages() }
+    await self.waitUntil { await pageGate.hasPendingRequest() }
+    XCTAssertTrue(controller.isLoadingHistory)
+
+    await controller.reconnect()
+
+    XCTAssertFalse(controller.isLoadingHistory)
+    await pageGate.release(.init(
+      messages: [Self.message("m-0", "old page", sequence: 1)], nextCursor: nil,
+      hasMore: false, snapshotSequence: 1))
+    await olderLoad.value
+    XCTAssertFalse(controller.isLoadingHistory)
+  }
+
+  @MainActor
+  func testAmbiguousConversationCreateRetryReusesRequestIDAndTitle() async {
+    let firstSession = ControlledSession()
+    let secondSession = ControlledSession()
+    let client = ControlledChatClient(
+      conversations: .init(
+        conversations: [Self.conversation("c-1")], nextCursor: nil, hasMore: false),
+      histories: [
+        "c-1|": [.init(messages: [], nextCursor: nil, hasMore: false, snapshotSequence: 0)]
+      ],
+      sessions: [firstSession, secondSession])
+    await client.failNextCreate()
+    let controller = HuskyConversationController(
+      operationTimeout: .seconds(1), acceptanceTimeout: .milliseconds(80),
+      cleanupTimeout: .milliseconds(30))
+    await controller.attach(profileID: UUID(), client: client)
+
+    await controller.createConversation(title: "A stable title")
+    let firstCreate = await client.createRequests()
+    XCTAssertEqual(firstCreate.count, 1)
+
+    await controller.createConversation(title: "A changed title")
+    let afterChangedTitle = await client.createRequests()
+    XCTAssertEqual(afterChangedTitle.count, 1)
+
+    await controller.createConversation(title: "A stable title")
+    let retries = await client.createRequests()
+    XCTAssertEqual(retries.count, 2)
+    XCTAssertEqual(retries[0].requestID, retries[1].requestID)
+    XCTAssertEqual(retries[0].title, retries[1].title)
   }
 
   @MainActor
@@ -261,6 +433,22 @@ private actor SubmissionRecorder {
   func snapshot() -> [(String, String)] { self.values }
 }
 
+private actor HistoryPageGate {
+  private var continuation: CheckedContinuation<HuskyHistoryPage, Never>?
+
+  func nextPage() async -> HuskyHistoryPage {
+    await withCheckedContinuation { self.continuation = $0 }
+  }
+
+  func hasPendingRequest() -> Bool { self.continuation != nil }
+
+  func release(_ page: HuskyHistoryPage) {
+    guard let continuation = self.continuation else { return }
+    self.continuation = nil
+    continuation.resume(returning: page)
+  }
+}
+
 private final class ControlledSession: HuskyConversationSession, @unchecked Sendable {
   let events: AsyncThrowingStream<HuskySequencedEvent, any Error>
   private let continuation: AsyncThrowingStream<HuskySequencedEvent, any Error>.Continuation
@@ -298,15 +486,20 @@ private actor ControlledChatClient: HuskyChatClient {
   private var sessions: [ControlledSession]
   private var opened: [(conversationID: String, afterSequence: UInt64, resumeToken: String?)] = []
   private var createdCount = 0
+  private var createFailuresRemaining = 0
+  private var creates: [(requestID: String, title: String)] = []
+  private let olderHistoryGate: HistoryPageGate?
 
   init(
     conversations: HuskyConversationPage,
     histories: [String: [HuskyHistoryPage]] = [:],
-    sessions: [ControlledSession] = []
+    sessions: [ControlledSession] = [],
+    olderHistoryGate: HistoryPageGate? = nil
   ) {
     self.conversationPages = ["": conversations]
     self.historyPages = histories
     self.sessions = sessions
+    self.olderHistoryGate = olderHistoryGate
   }
 
   func setConversationPage(_ page: HuskyConversationPage, before: String?) {
@@ -328,6 +521,11 @@ private actor ControlledChatClient: HuskyChatClient {
   }
 
   func createConversation(requestID: String, title: String) async throws -> HuskyConversation {
+    self.creates.append((requestID: requestID, title: title))
+    if self.createFailuresRemaining > 0 {
+      self.createFailuresRemaining -= 1
+      throw HuskyClientError.resynchronizationRequired
+    }
     self.createdCount += 1
     return HuskyConversation(
       id: "created-\(self.createdCount)", title: title,
@@ -337,6 +535,9 @@ private actor ControlledChatClient: HuskyChatClient {
   func getHistory(conversationID: String, pageSize: UInt32, before cursor: String?) async throws
     -> HuskyHistoryPage
   {
+    if cursor == "older", let olderHistoryGate = self.olderHistoryGate {
+      return await olderHistoryGate.nextPage()
+    }
     let key = "\(conversationID)|\(cursor ?? "")"
     guard var pages = self.historyPages[key], !pages.isEmpty else {
       return .init(messages: [], nextCursor: nil, hasMore: false, snapshotSequence: 0)
@@ -361,4 +562,8 @@ private actor ControlledChatClient: HuskyChatClient {
   }
 
   func createCount() -> Int { self.createdCount }
+
+  func failNextCreate() { self.createFailuresRemaining += 1 }
+
+  func createRequests() -> [(requestID: String, title: String)] { self.creates }
 }

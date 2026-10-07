@@ -34,6 +34,11 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     var timeoutTask: Task<Void, Never>?
   }
 
+  private struct PendingConversationCreate: Sendable {
+    let requestID: String
+    let title: String
+  }
+
   private enum TimeoutError: Error {
     case elapsed
   }
@@ -55,10 +60,14 @@ public enum HuskySubmissionResult: Sendable, Equatable {
   private var partialMessages: [String: HuskyMessageBodyValidator.PartialMessage] = [:]
   private var requestPayloads: [RequestKey: String] = [:]
   private var acceptedRequests: Set<RequestKey> = []
+  private var completedRequests: Set<RequestKey> = []
   private var failedBeforeAcceptance: Set<RequestKey> = []
   private var acceptanceWaiters: [UUID: AcceptanceWaiter] = [:]
   private var inFlightSubmissions: Set<RequestKey> = []
   private var recoveryAttempts = 0
+  // Retained after an ambiguous create so retries reuse the original idempotency key.
+  // This intent is volatile; a persisted-create contract would be needed across app restarts.
+  private var pendingConversationCreate: PendingConversationCreate?
 
   private let operationTimeout: Duration
   private let acceptanceTimeout: Duration
@@ -248,15 +257,23 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       self.statusText = "Enter a conversation title."
       return
     }
+    if let pending = self.pendingConversationCreate, pending.title != cleanedTitle {
+      self.statusText =
+        "Retry the pending conversation create with the same title before changing it."
+      return
+    }
+    let requestID = self.pendingConversationCreate?.requestID ?? UUID().uuidString.lowercased()
+    self.pendingConversationCreate = PendingConversationCreate(
+      requestID: requestID, title: cleanedTitle)
     let currentGeneration = self.generation
     self.isLoading = true
     self.statusText = nil
     do {
       let conversation = try await self.bounded(self.operationTimeout) {
-        try await client.createConversation(
-          requestID: UUID().uuidString.lowercased(), title: cleanedTitle)
+        try await client.createConversation(requestID: requestID, title: cleanedTitle)
       }
       guard self.generation == currentGeneration else { return }
+      self.pendingConversationCreate = nil
       self.upsertConversation(conversation, preferIncoming: true)
       self.isLoading = false
       await self.selectConversation(id: conversation.id)
@@ -290,6 +307,10 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       guard self.generation == currentGeneration,
         self.selectedConversationID == conversationID
       else { return }
+      guard self.historySnapshotSequence == snapshot, self.historyCursor == before else {
+        self.statusText = "History changed while loading. Reconnect to refresh it."
+        return
+      }
       guard page.snapshotSequence == snapshot else {
         self.statusText = "History changed while loading. Reconnect to refresh it."
         self.hasMoreHistory = false
@@ -381,7 +402,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       profileID: profileID, conversationID: conversationID, requestID: requestID)
     if let priorText = self.requestPayloads[key], priorText != text {
       self.statusText = "This request ID is already associated with different text."
-      return .unconfirmed
+      return self.completedRequests.contains(key) ? .rejected : .unconfirmed
     }
     if let activeRequestID, activeRequestID != requestID {
       self.statusText = "Wait for the current reply to finish before sending another message."
@@ -453,6 +474,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     self.eventTask = nil
     self.resolveAllWaiters(.unconfirmed)
     self.clearRequestState()
+    self.pendingConversationCreate = nil
     self.recoveryAttempts = 0
     self.isConnected = false
     self.isLoading = false
@@ -506,6 +528,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     self.eventTask = nil
     self.resolveAllWaiters(.unconfirmed)
     self.recoveryAttempts = 0
+    self.isLoadingHistory = false
+    self.inFlightSubmissions = []
     self.isConnected = false
     self.isLoading = true
     self.statusText = "Reconnecting…"
@@ -652,9 +676,9 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     case .sessionReady:
       break
 
-    case .messageAccepted(let requestID, let message, _):
+    case .messageAccepted(let requestID, let message, let replayed):
       self.upsertEventMessage(message)
-      self.activeRequestID = requestID
+      if !replayed { self.activeRequestID = requestID }
       guard let profileID = self.profileID else { return }
       let key = RequestKey(
         profileID: profileID, conversationID: conversationID, requestID: requestID)
@@ -815,7 +839,11 @@ public enum HuskySubmissionResult: Sendable, Equatable {
   private func finishRequest(_ requestID: String?, conversationID: String) {
     guard let requestID, let profileID = self.profileID else { return }
     let key = RequestKey(profileID: profileID, conversationID: conversationID, requestID: requestID)
-    self.requestPayloads.removeValue(forKey: key)
+    if self.acceptedRequests.contains(key) {
+      self.completedRequests.insert(key)
+    } else {
+      self.requestPayloads.removeValue(forKey: key)
+    }
     self.inFlightSubmissions.remove(key)
   }
 
@@ -860,6 +888,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
   private func clearRequestState() {
     self.requestPayloads = [:]
     self.acceptedRequests = []
+    self.completedRequests = []
     self.failedBeforeAcceptance = []
     self.inFlightSubmissions = []
   }
