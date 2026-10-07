@@ -201,6 +201,11 @@ public enum HuskyProfileStoreError: Error, Sendable, Equatable, LocalizedError {
   case invalidPreferences
   case unsupportedPreferencesVersion(Int)
   case preferencesWriteFailed
+  case noPreferencesToRecover
+  case recoveryBackupUnavailable
+  case recoveryBackupVerificationFailed
+  case recoveryPreferencesChanged
+  case recoveryRemovalFailed
   case credentialOperationFailed(operation: String, status: Int32)
   case credentialDataInvalid
   case transactionRollbackFailed
@@ -220,6 +225,14 @@ public enum HuskyProfileStoreError: Error, Sendable, Equatable, LocalizedError {
     case .unsupportedPreferencesVersion(let version):
       "Saved Husky preferences use an unsupported version (\(version))."
     case .preferencesWriteFailed: "Husky preferences could not be saved."
+    case .noPreferencesToRecover: "No saved Husky preferences were found to recover."
+    case .recoveryBackupUnavailable: "A unique Husky recovery backup could not be created."
+    case .recoveryBackupVerificationFailed:
+      "The Husky recovery backup could not be verified; the original preferences remain."
+    case .recoveryPreferencesChanged:
+      "Husky preferences changed during recovery; the current preferences were preserved."
+    case .recoveryRemovalFailed:
+      "Husky could not remove the active preferences; saved data was preserved."
     case .credentialOperationFailed(let operation, let status):
       "The backend credential could not be \(operation) (Keychain status \(status))."
     case .credentialDataInvalid: "The saved backend credential could not be read."
@@ -264,6 +277,10 @@ private final class UserDefaultsHuskyProfilePreferences: HuskyProfilePreferences
 @MainActor
 public final class HuskyProfileStore {
   private static let preferencesVersion = 1
+  private static let preferencesKey = "com.sirerun.husky.profile-store.v1"
+  public static let recoveryBackupKeyPrefix = "com.sirerun.husky.profile-store.recovery-backup."
+  public static let recoveryExplanation =
+    "Husky can move unreadable profile preferences into a retained recovery backup and clear the active preference record. Backend credentials in Keychain are not changed."
   public private(set) var profiles: [HuskyBackendProfile]
   public private(set) var selectedProfileID: UUID?
   public private(set) var revision: UInt64 = 0
@@ -271,6 +288,44 @@ public final class HuskyProfileStore {
   @ObservationIgnored private let preferences: any HuskyProfilePreferencesBacking
   @ObservationIgnored private let credentials: any HuskyCredentialStore
   @ObservationIgnored private var state: PreferencesState
+
+  /// Invoke only after the user confirms the recovery explanation in the UI.
+  /// Raw preference bytes are retained under a unique key; credentials are untouched.
+  public static func recoverPreferences(defaults: UserDefaults = .standard) throws {
+    guard let original = defaults.data(forKey: Self.preferencesKey) else {
+      throw HuskyProfileStoreError.noPreferencesToRecover
+    }
+
+    var backupKey: String?
+    for _ in 0..<16 {
+      let candidate = Self.recoveryBackupKeyPrefix + UUID().uuidString
+      guard defaults.object(forKey: candidate) == nil else { continue }
+      defaults.set(original, forKey: candidate)
+      guard defaults.data(forKey: candidate) == original else {
+        throw HuskyProfileStoreError.recoveryBackupVerificationFailed
+      }
+      backupKey = candidate
+      break
+    }
+    guard backupKey != nil else {
+      throw HuskyProfileStoreError.recoveryBackupUnavailable
+    }
+
+    guard defaults.data(forKey: Self.preferencesKey) == original else {
+      throw HuskyProfileStoreError.recoveryPreferencesChanged
+    }
+    defaults.removeObject(forKey: Self.preferencesKey)
+    guard defaults.object(forKey: Self.preferencesKey) == nil else {
+      throw HuskyProfileStoreError.recoveryRemovalFailed
+    }
+  }
+
+  /// Lists backup key names only; preference and draft contents are never returned.
+  public static func recoveryBackupKeys(defaults: UserDefaults = .standard) -> [String] {
+    defaults.dictionaryRepresentation().keys
+      .filter { $0.hasPrefix(Self.recoveryBackupKeyPrefix) }
+      .sorted()
+  }
 
   public convenience init(
     defaults: UserDefaults = .standard,
@@ -367,7 +422,7 @@ public final class HuskyProfileStore {
 
   public func draft(profileID: UUID, conversationID: String) -> HuskyDraftRecord {
     _ = self.revision
-    self.state.drafts.first {
+    return self.state.drafts.first {
       $0.profileID == profileID && $0.conversationID == conversationID
     }?.record ?? HuskyDraftRecord(text: "")
   }
@@ -396,7 +451,7 @@ public final class HuskyProfileStore {
 
   public func lastConversation(profileID: UUID) -> String? {
     _ = self.revision
-    self.state.lastConversations.first { $0.profileID == profileID }?.conversationID
+    return self.state.lastConversations.first { $0.profileID == profileID }?.conversationID
   }
 
   public func setLastConversation(_ conversationID: String?, profileID: UUID) throws {
@@ -580,7 +635,7 @@ public final class HuskyProfileStore {
     var lastConversations: [StoredLastConversation]
 
     static let empty = PreferencesState(
-      version: HuskyProfileStore.preferencesVersion,
+      version: 1,
       profiles: [],
       selectedProfileID: nil,
       drafts: [],

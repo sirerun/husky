@@ -286,6 +286,43 @@ final class HuskyProfileStoreTests: XCTestCase {
     }
   }
 
+  func testExplicitRecoveryKeepsRawBytesUnderNewBackupAndPreservesOldBackups() throws {
+    let suite = "HuskyProfileRecoveryTests-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defaults.removePersistentDomain(forName: suite)
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let original = Data([0x7b, 0xff, 0x00, 0x7d])
+    let existingBackupKey = HuskyProfileStore.recoveryBackupKeyPrefix + "existing"
+    let existingBackup = Data("keep this backup".utf8)
+    defaults.set(original, forKey: Self.preferencesKey)
+    defaults.set(existingBackup, forKey: existingBackupKey)
+
+    try HuskyProfileStore.recoverPreferences(defaults: defaults)
+
+    XCTAssertNil(defaults.object(forKey: Self.preferencesKey))
+    XCTAssertEqual(defaults.data(forKey: existingBackupKey), existingBackup)
+    let backupKeys = HuskyProfileStore.recoveryBackupKeys(defaults: defaults)
+    XCTAssertEqual(backupKeys.count, 2)
+    let newBackupKey = try XCTUnwrap(backupKeys.first { $0 != existingBackupKey })
+    XCTAssertEqual(defaults.data(forKey: newBackupKey), original)
+    XCTAssertTrue(HuskyProfileStore.recoveryExplanation.contains("Keychain"))
+  }
+
+  func testRecoveryWithoutRawPreferencesFailsWithoutChangingExistingValue() throws {
+    let suite = "HuskyProfileRecoveryTests-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defaults.removePersistentDomain(forName: suite)
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set("preserve this value", forKey: Self.preferencesKey)
+
+    XCTAssertThrowsError(try HuskyProfileStore.recoverPreferences(defaults: defaults)) {
+      XCTAssertEqual($0 as? HuskyProfileStoreError, .noPreferencesToRecover)
+    }
+    XCTAssertEqual(defaults.string(forKey: Self.preferencesKey), "preserve this value")
+    XCTAssertTrue(HuskyProfileStore.recoveryBackupKeys(defaults: defaults).isEmpty)
+  }
+
   private static let preferencesKey = "com.sirerun.husky.profile-store.v1"
 
 }
