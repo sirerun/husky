@@ -1,12 +1,28 @@
 import Foundation
+import HuskyCore
 import Observation
 
 @Observable
 @MainActor
 final class HuskyChatPanelModel {
-  private(set) var messages: [HuskyPanelMessage] = []
+  private var fixtureMessages: [HuskyPanelMessage] = []
+  var recoveryClient: (any HuskyRecoverableSettingsClient)? {
+    client as? any HuskyRecoverableSettingsClient
+  }
+  var liveClient: HuskyLiveChatClient? { client as? HuskyLiveChatClient }
+  var messages: [HuskyPanelMessage] {
+    if let liveClient {
+      return liveClient.conversation.messages.map {
+        HuskyPanelMessage(id: $0.id, role: $0.role == .user ? .user : .backend, text: $0.text)
+      }
+    }
+    return fixtureMessages
+  }
   private(set) var isSending = false
-  private(set) var statusText: String?
+  private var operationStatus: String?
+  var statusText: String? {
+    operationStatus ?? liveClient?.localStatus ?? liveClient?.conversation.statusText
+  }
 
   private let client: any HuskyChatPanelClient
   @ObservationIgnored private var updatesTask: Task<Void, Never>?
@@ -17,13 +33,13 @@ final class HuskyChatPanelModel {
     updatesTask = Task { [weak self, client] in
       for await messages in client.messageUpdates() {
         guard let self else { return }
-        self.messages = messages
+        self.fixtureMessages = messages
       }
     }
     statusTask = Task { [weak self, client] in
       for await status in client.statusUpdates() {
         guard let self else { return }
-        self.statusText = status
+        self.operationStatus = status
       }
     }
   }
@@ -40,14 +56,14 @@ final class HuskyChatPanelModel {
     guard !trimmedText.isEmpty, !isSending else { return false }
 
     isSending = true
-    statusText = nil
+    operationStatus = nil
     defer { isSending = false }
 
     do {
       try await client.submit(trimmedText)
       return true
     } catch {
-      statusText =
+      operationStatus =
         (error as? LocalizedError)?.errorDescription
         ?? "Message could not be sent. Check the selected connection and try again."
       return false

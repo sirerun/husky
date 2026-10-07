@@ -87,3 +87,65 @@ The user confirmed the supplied glass-chat-2 dist as the floating-chat reference
 - Sizing correction reviewed at `c536ce5`; both legacy frame variants now match the fresh-install target and custom frames remain unchanged.
 - Integrated `swift test --package-path .` passed on `74c9cf3` after correcting the two stale mapper-validator calls. Strict formatting, `swift package dump-package`, and `git diff --check` passed. The build emitted two pre-existing unnecessary-`try` warnings in `HuskyLimitTests.swift`.
 - Native fixture window screenshot measured 896×1088 pixels, corresponding to the 448×544-point target at 2×, and the existing conversation text remained readable. Several CUA drag attempts did not change the saved frame, so native movement and restore are still unverified.
+
+## E2 implementation continuation — 2026-10-06
+
+PR #5 rebase-merged the independently reviewed delivery plan at `ec984fb`.
+Reviewed candidate `cd5f226` had identical landed content. The E2 source work
+adds profile-specific authorization to all RPCs and explicitly cancels local
+session teardown so an unresponsive peer cannot block shutdown indefinitely.
+Normal startup is being wired to saved connections and accepted-message draft
+semantics; static and original fixture demonstrations remain explicit.
+Three isolated Luna workers own profile storage, conversation orchestration and
+native window lifecycle. Native Mac exemption applies; new full builds/tests
+remain held while host load exceeds 10. No new runtime or release claim is made.
+
+## E2 verification checkpoint — 2026-10-06
+
+At `2491d65`, a fresh native `swift test --jobs 2 --cache-path .build/package-cache`
+build and all 77 tests passed (58 core, 10 fixture/auth, 9 geometry) under the
+shared build lease. The initial run at `0532080` had two failures; endpoint
+validation and the paginated canonical-history expectation were corrected,
+alongside independently identified replay/create/history/reconnect races.
+Both leases were released. Formatting and diff checks passed.
+
+The isolated native proof app launched and wrote a 448×544 autosaved frame,
+but CUA returned `cgWindowNotFound`. A read-only session check confirmed the
+Mac screen was locked. No unlock was attempted. Saved preferences are not
+visible-window, drag, focus, IME, display/Dock or accessibility acceptance.
+Owned proof-app and loopback-fixture processes were stopped; no user app or
+shared process was stopped. Native acceptance remains blocked on an unlocked
+interactive session.
+
+A subsequent additive recovery extension is under verification: authoritative
+partial text/revision snapshots and seed propagation through both transport and
+controller validators. It prevents guessing state when attaching during an
+in-progress message. These changes need a fresh integrated test result and
+independent review; the 77-test result does not cover them. PR #6 remains draft.
+
+## Complete E2 source test gate — 2026-10-06
+
+The test-target/fixture build and `swift test --jobs 2 --cache-path .build/package-cache` passed at
+`e3b723297b9711cc70380277b14a9f479ef34270`: 65 core + 14 fixture/auth/recovery +
+9 geometry = 88 tests. The shared lease was acquired only below load 10 and
+released immediately afterward. The test log explicitly records the fixture
+product; it does not establish a fresh compilation of the app target in that run.
+A separate `swift build --product Husky --jobs 2 --cache-path .build/package-cache`
+passed at `2326fecd4352e552b02d2ba39b4e59d162fedff8` under a new lease, which was
+also released. App/core/package source is unchanged from the tested `e3b7232`;
+this explicit application build accepts up-to-date cached outputs and is not a
+forced clean rebuild. The additive partial snapshot path is covered over in-process real gRPC,
+including seeded replay, missing baseline, revision/cumulative byte rejection,
+canonical completion, sequenced asynchronous failure and cursor expiry.
+
+Independent review drove replay-ack, create-retry, pagination/resync, reconnect
+state, corrupted-preferences recovery and asynchronous fixture-failure fixes.
+Create retry ID/title is retained within a live controller, but not across
+application restart; adapter documentation states that limitation. Typed-message
+pending ID/payload remains durable per profile/conversation.
+
+Independent Luna source review PASS at `e3b7232` against `ec984fb`, including
+all final fixture corrections. Native acceptance remains blocked by the
+locked Mac session; no additional CUA attempts or unlock action is pending.
+PR #6 remains draft and unmerged. Main's planning PR #5 is landed at `ec984fb`;
+the primary checkout was fast-forwarded cleanly to that revision.

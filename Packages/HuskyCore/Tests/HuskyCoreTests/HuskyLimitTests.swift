@@ -181,8 +181,8 @@ final class HuskyLimitTests: XCTestCase {
         delta, maximumBytes: 4096, partialMessages: &partialMessages)
     ) { error in
       XCTAssertEqual(
-        error as? HuskyClientError,
-        .malformedResponse("text delta arrived before message start")
+        error as? HuskyPartialRecoveryError,
+        .missingBaseline
       )
     }
     XCTAssertTrue(partialMessages.isEmpty)
