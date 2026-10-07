@@ -367,7 +367,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       self.statusText = "This message is too long."
       return .rejected
     }
-    guard let client = self.client,
+    guard self.client != nil,
       let session = self.session,
       let profileID = self.profileID,
       let conversationID = self.selectedConversationID
@@ -393,7 +393,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     if !self.acceptedRequests.contains(key), !self.inFlightSubmissions.contains(key) {
       self.inFlightSubmissions.insert(key)
       do {
-        try await self.bounded(self.operationTimeout) {
+        _ = try await self.bounded(self.operationTimeout) {
           try await session.submit(requestID: requestID, text: text)
           return true
         }
@@ -402,7 +402,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
         self.inFlightSubmissions.remove(key)
         if self.acceptedRequests.contains(key) { return .accepted }
         if self.failedBeforeAcceptance.contains(key) { return .rejected }
-        self.statusText = "The backend has not confirmed this message. Retry with the same request ID and text."
+        self.statusText =
+          "The backend has not confirmed this message. Retry with the same request ID and text."
         return .unconfirmed
       }
       guard self.generation == currentGeneration else { return .unconfirmed }
@@ -420,7 +421,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     else { return }
     let currentGeneration = self.generation
     do {
-      try await self.bounded(self.operationTimeout) {
+      _ = try await self.bounded(self.operationTimeout) {
         try await session.cancel(requestID: requestID)
         return true
       }
@@ -569,7 +570,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       }
       self.session = opened
       self.isLoading = false
-      self.startEventConsumer(opened, client: client, conversationID: conversationID, generation: generation)
+      self.startEventConsumer(
+        opened, client: client, conversationID: conversationID, generation: generation)
     } catch {
       guard self.generation == generation else { return }
       self.isLoading = false
@@ -654,7 +656,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
       self.upsertEventMessage(message)
       self.activeRequestID = requestID
       guard let profileID = self.profileID else { return }
-      let key = RequestKey(profileID: profileID, conversationID: conversationID, requestID: requestID)
+      let key = RequestKey(
+        profileID: profileID, conversationID: conversationID, requestID: requestID)
       self.acceptedRequests.insert(key)
       self.failedBeforeAcceptance.remove(key)
       self.resolveWaiters(for: key, result: .accepted)
@@ -694,7 +697,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     case .requestFailed(let requestID, _, let message, _):
       if self.activeRequestID == requestID { self.activeRequestID = nil }
       guard let profileID = self.profileID else { return }
-      let key = RequestKey(profileID: profileID, conversationID: conversationID, requestID: requestID)
+      let key = RequestKey(
+        profileID: profileID, conversationID: conversationID, requestID: requestID)
       if !self.acceptedRequests.contains(key) {
         self.failedBeforeAcceptance.insert(key)
         self.resolveWaiters(for: key, result: .rejected)
@@ -740,7 +744,8 @@ public enum HuskySubmissionResult: Sendable, Equatable {
         self.mergeCanonicalSnapshot(page)
       } catch {
         guard self.generation == generation else { return }
-        self.statusText = "The conversation could not refresh after a stream gap. Select Reconnect to try again."
+        self.statusText =
+          "The conversation could not refresh after a stream gap. Select Reconnect to try again."
         return
       }
     }
@@ -749,12 +754,14 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     let delay = Duration.milliseconds(Int64(250 * (1 << (self.recoveryAttempts - 1))))
     do { try await Task.sleep(for: delay) } catch { return }
     guard self.generation == generation else { return }
-    await self.openResumedStream(client: client, conversationID: conversationID, generation: generation)
+    await self.openResumedStream(
+      client: client, conversationID: conversationID, generation: generation)
   }
 
   private func mergeCanonicalSnapshot(_ page: HuskyHistoryPage) {
     let snapshot = page.snapshotSequence
-    var byID = Dictionary(uniqueKeysWithValues: self.messages.filter { $0.sequence <= snapshot }.map { ($0.id, $0) })
+    var byID = Dictionary(
+      uniqueKeysWithValues: self.messages.filter { $0.sequence <= snapshot }.map { ($0.id, $0) })
     for message in page.messages {
       byID[message.id] = message
     }
@@ -812,7 +819,9 @@ public enum HuskySubmissionResult: Sendable, Equatable {
     self.inFlightSubmissions.remove(key)
   }
 
-  private func waitForAcceptance(_ key: RequestKey, generation: UInt64) async -> HuskySubmissionResult {
+  private func waitForAcceptance(_ key: RequestKey, generation: UInt64) async
+    -> HuskySubmissionResult
+  {
     if self.acceptedRequests.contains(key) { return .accepted }
     if self.failedBeforeAcceptance.contains(key) { return .rejected }
     let waiterID = UUID()

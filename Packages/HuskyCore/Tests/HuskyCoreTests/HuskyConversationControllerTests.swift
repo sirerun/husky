@@ -6,7 +6,8 @@ import XCTest
 final class HuskyConversationControllerTests: XCTestCase {
   @MainActor
   func testAttachDoesNotCreateAConversationForAnEmptyBackend() async {
-    let client = ControlledChatClient(conversations: .init(conversations: [], nextCursor: nil, hasMore: false))
+    let client = ControlledChatClient(
+      conversations: .init(conversations: [], nextCursor: nil, hasMore: false))
     let controller = HuskyConversationController(
       operationTimeout: .seconds(1), acceptanceTimeout: .milliseconds(80),
       cleanupTimeout: .milliseconds(30))
@@ -53,10 +54,16 @@ final class HuskyConversationControllerTests: XCTestCase {
       conversations: .init(conversations: [conversation], nextCursor: nil, hasMore: false),
       histories: [
         "c-1|": [
-          .init(messages: [Self.message("m-1", "streamed", sequence: 8)], nextCursor: "older", hasMore: true, snapshotSequence: 8)
+          .init(
+            messages: [Self.message("m-1", "streamed", sequence: 8)], nextCursor: "older",
+            hasMore: true, snapshotSequence: 8)
         ],
         "c-1|older": [
-          .init(messages: [Self.message("m-0", "older", sequence: 2), Self.message("m-1", "stale page copy", sequence: 4)], nextCursor: nil, hasMore: false, snapshotSequence: 8)
+          .init(
+            messages: [
+              Self.message("m-0", "older", sequence: 2),
+              Self.message("m-1", "stale page copy", sequence: 4),
+            ], nextCursor: nil, hasMore: false, snapshotSequence: 8)
         ],
       ],
       sessions: [ControlledSession()])
@@ -81,21 +88,27 @@ final class HuskyConversationControllerTests: XCTestCase {
       conversations: .init(conversations: [conversation], nextCursor: nil, hasMore: false),
       histories: [
         "c-1|": [
-          .init(messages: [Self.message("m-1", "before gap", sequence: 1)], nextCursor: nil, hasMore: false, snapshotSequence: 1),
-          .init(messages: [Self.message("m-2", "canonical", sequence: 2)], nextCursor: nil, hasMore: false, snapshotSequence: 2),
-        ],
+          .init(
+            messages: [Self.message("m-1", "before gap", sequence: 1)], nextCursor: nil,
+            hasMore: false, snapshotSequence: 1),
+          .init(
+            messages: [Self.message("m-2", "canonical", sequence: 2)], nextCursor: nil,
+            hasMore: false, snapshotSequence: 2),
+        ]
       ],
       sessions: [first, second])
     let controller = HuskyConversationController(
       operationTimeout: .seconds(1), acceptanceTimeout: .milliseconds(80),
       cleanupTimeout: .milliseconds(30))
     await controller.attach(profileID: UUID(), client: client)
-    first.emit(.init(
-      sequence: 0,
-      event: .sessionReady(conversationID: "c-1", caughtUpThrough: 1, resumeToken: "resume-1")))
+    first.emit(
+      .init(
+        sequence: 0,
+        event: .sessionReady(conversationID: "c-1", caughtUpThrough: 1, resumeToken: "resume-1")))
     await self.waitUntil { controller.isConnected }
 
-    first.emit(.init(sequence: 3, event: .statusChanged(requestID: nil, status: .typing, detail: "")))
+    first.emit(
+      .init(sequence: 3, event: .statusChanged(requestID: nil, status: .typing, detail: "")))
     await self.waitUntil { await client.openRequests().count == 2 }
 
     XCTAssertEqual(controller.messages.map(\.id), ["m-2"])
@@ -110,7 +123,9 @@ final class HuskyConversationControllerTests: XCTestCase {
     let session = ControlledSession()
     let client = ControlledChatClient(
       conversations: .init(conversations: [conversation], nextCursor: nil, hasMore: false),
-      histories: ["c-1|": [.init(messages: [], nextCursor: nil, hasMore: false, snapshotSequence: 0)]],
+      histories: [
+        "c-1|": [.init(messages: [], nextCursor: nil, hasMore: false, snapshotSequence: 0)]
+      ],
       sessions: [session])
     let controller = HuskyConversationController(
       operationTimeout: .seconds(1), acceptanceTimeout: .milliseconds(100),
@@ -133,10 +148,12 @@ final class HuskyConversationControllerTests: XCTestCase {
       await controller.submitResult(text: "hello", requestID: "req-1")
     }
     await self.waitUntil { await session.submissions().count == 2 }
-    session.emit(.init(
-      sequence: 1,
-      event: .messageAccepted(
-        requestID: "req-1", userMessage: Self.message("m-user", "hello", sequence: 1), replayed: true)))
+    session.emit(
+      .init(
+        sequence: 1,
+        event: .messageAccepted(
+          requestID: "req-1", userMessage: Self.message("m-user", "hello", sequence: 1),
+          replayed: true)))
 
     let retryResult = await retry.value
     XCTAssertEqual(retryResult, .accepted)
@@ -147,8 +164,11 @@ final class HuskyConversationControllerTests: XCTestCase {
   func testExplicitBackendFailureBeforeAcceptanceIsRejected() async {
     let session = ControlledSession()
     let client = ControlledChatClient(
-      conversations: .init(conversations: [Self.conversation("c-1")], nextCursor: nil, hasMore: false),
-      histories: ["c-1|": [.init(messages: [], nextCursor: nil, hasMore: false, snapshotSequence: 0)]],
+      conversations: .init(
+        conversations: [Self.conversation("c-1")], nextCursor: nil, hasMore: false),
+      histories: [
+        "c-1|": [.init(messages: [], nextCursor: nil, hasMore: false, snapshotSequence: 0)]
+      ],
       sessions: [session])
     let controller = HuskyConversationController(
       operationTimeout: .seconds(1), acceptanceTimeout: .seconds(1),
@@ -159,10 +179,12 @@ final class HuskyConversationControllerTests: XCTestCase {
       await controller.submitResult(text: "hello", requestID: "req-rejected")
     }
     await self.waitUntil { await session.submissions().count == 1 }
-    session.emit(.init(
-      sequence: 1,
-      event: .requestFailed(
-        requestID: "req-rejected", publicCode: "invalid_request", message: "Rejected", retryable: false)))
+    session.emit(
+      .init(
+        sequence: 1,
+        event: .requestFailed(
+          requestID: "req-rejected", publicCode: "invalid_request", message: "Rejected",
+          retryable: false)))
 
     let result = await submission.value
     XCTAssertEqual(result, .rejected)
@@ -179,7 +201,11 @@ final class HuskyConversationControllerTests: XCTestCase {
         nextCursor: nil, hasMore: false),
       histories: [
         "c-1|": [.init(messages: [], nextCursor: nil, hasMore: false, snapshotSequence: 0)],
-        "c-2|": [.init(messages: [Self.message("m-new", "second", sequence: 1)], nextCursor: nil, hasMore: false, snapshotSequence: 1)],
+        "c-2|": [
+          .init(
+            messages: [Self.message("m-new", "second", sequence: 1)], nextCursor: nil,
+            hasMore: false, snapshotSequence: 1)
+        ],
       ],
       sessions: [first, second])
     let controller = HuskyConversationController(
@@ -187,11 +213,15 @@ final class HuskyConversationControllerTests: XCTestCase {
       cleanupTimeout: .milliseconds(30))
     await controller.attach(profileID: UUID(), client: client)
     await controller.selectConversation(id: "c-2")
-    await self.waitUntil { controller.selectedConversationID == "c-2" && controller.messages.count == 1 }
+    await self.waitUntil {
+      controller.selectedConversationID == "c-2" && controller.messages.count == 1
+    }
 
-    first.emit(.init(
-      sequence: 1,
-      event: .messageStarted(requestID: "old", message: Self.message("m-old", "late", sequence: 1))))
+    first.emit(
+      .init(
+        sequence: 1,
+        event: .messageStarted(
+          requestID: "old", message: Self.message("m-old", "late", sequence: 1))))
     try? await Task.sleep(for: .milliseconds(30))
 
     XCTAssertEqual(controller.selectedConversationID, "c-2")
@@ -290,8 +320,11 @@ private actor ControlledChatClient: HuskyChatClient {
       maximumHistoryPageSize: 100, features: [])
   }
 
-  func listConversations(pageSize: UInt32, before cursor: String?) async throws -> HuskyConversationPage {
-    self.conversationPages[cursor ?? ""] ?? .init(conversations: [], nextCursor: nil, hasMore: false)
+  func listConversations(pageSize: UInt32, before cursor: String?) async throws
+    -> HuskyConversationPage
+  {
+    self.conversationPages[cursor ?? ""]
+      ?? .init(conversations: [], nextCursor: nil, hasMore: false)
   }
 
   func createConversation(requestID: String, title: String) async throws -> HuskyConversation {
