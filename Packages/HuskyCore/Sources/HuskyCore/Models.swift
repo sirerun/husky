@@ -88,22 +88,34 @@ public struct HuskyConversationPage: Sendable, Equatable {
   }
 }
 
+public struct HuskyPartialMessageSnapshot: Sendable, Equatable {
+  public let message: HuskyMessage
+  public let revision: UInt64
+  public init(message: HuskyMessage, revision: UInt64) {
+    self.message = message
+    self.revision = revision
+  }
+}
+
 public struct HuskyHistoryPage: Sendable, Equatable {
   public let messages: [HuskyMessage]
   public let nextCursor: String?
   public let hasMore: Bool
   public let snapshotSequence: UInt64
+  public let partialMessages: [HuskyPartialMessageSnapshot]
 
   public init(
     messages: [HuskyMessage],
     nextCursor: String?,
     hasMore: Bool,
-    snapshotSequence: UInt64
+    snapshotSequence: UInt64,
+    partialMessages: [HuskyPartialMessageSnapshot] = []
   ) {
     self.messages = messages
     self.nextCursor = nextCursor
     self.hasMore = hasMore
     self.snapshotSequence = snapshotSequence
+    self.partialMessages = partialMessages
   }
 }
 

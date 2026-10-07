@@ -75,6 +75,9 @@ message GetHistoryResponse {
   bool has_more = 3;
   // First-page responses also establish the boundary used to attach a live stream.
   uint64 snapshot_sequence = 4;
+  // All in-progress messages at exactly snapshot_sequence, including outside this page.
+  // Advertised by partial_message_snapshots; max 64 entries / 2 MiB total text.
+  repeated PartialMessageSnapshot partial_messages = 5;
 }
 
 enum MessageRole {
@@ -92,6 +95,11 @@ message ChatMessage {
   google.protobuf.Timestamp created_at = 5;
   string request_id = 6;
   uint64 sequence = 7;
+}
+
+message PartialMessageSnapshot {
+  ChatMessage message = 1;
+  uint64 revision = 2; // Last applied text revision; zero means no delta yet.
 }
 
 message ClientCommand {
