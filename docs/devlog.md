@@ -125,11 +125,16 @@ independent review; the 77-test result does not cover them. PR #6 remains draft.
 
 ## Complete E2 source test gate — 2026-10-06
 
-Fresh `swift test --jobs 2 --cache-path .build/package-cache` passed at
+The test-target/fixture build and `swift test --jobs 2 --cache-path .build/package-cache` passed at
 `e3b723297b9711cc70380277b14a9f479ef34270`: 65 core + 14 fixture/auth/recovery +
 9 geometry = 88 tests. The shared lease was acquired only below load 10 and
-released immediately afterward. The app and fixture products compiled in this
-run. The additive partial snapshot path is covered over in-process real gRPC,
+released immediately afterward. The test log explicitly records the fixture
+product; it does not establish a fresh compilation of the app target in that run.
+A separate `swift build --product Husky --jobs 2 --cache-path .build/package-cache`
+passed at `2326fecd4352e552b02d2ba39b4e59d162fedff8` under a new lease, which was
+also released. App/core/package source is unchanged from the tested `e3b7232`;
+this explicit application build accepts up-to-date cached outputs and is not a
+forced clean rebuild. The additive partial snapshot path is covered over in-process real gRPC,
 including seeded replay, missing baseline, revision/cumulative byte rejection,
 canonical completion, sequenced asynchronous failure and cursor expiry.
 

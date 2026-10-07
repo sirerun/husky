@@ -37,7 +37,7 @@ retains the foundation's direct fixture demonstration.
 
 ## Delivery status
 
-Client source and automated verification are under review in [PR #6](https://github.com/sirerun/husky/pull/6). All 88 automated tests pass at `e3b7232`. Native
+The client source candidate is in [PR #6](https://github.com/sirerun/husky/pull/6). All 88 automated tests pass at `e3b7232`. Native
 movement, focus/IME, display and accessibility acceptance remain open. Signed
 releases, local installation and Sparkle update verification are later delivery
 gates. See the [checkable plan](docs/plan.md) and [verification log](docs/devlog.md)
