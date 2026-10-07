@@ -333,17 +333,38 @@ final class HuskyProfileStoreTests: XCTestCase {
     XCTAssertTrue(HuskyProfileStore.recoveryExplanation.contains("Keychain"))
   }
 
-  func testRecoveryWithoutRawPreferencesFailsWithoutChangingExistingValue() throws {
+  func testExplicitRecoveryPreservesNonDataPropertyListValues() throws {
+    let values: [(String, Any)] = [
+      ("string", "preserve this string"),
+      ("array", ["first", "second"] as [String]),
+      ("dictionary", ["nested": ["preserve": "this value"]] as [String: Any]),
+    ]
+
+    for (label, original) in values {
+      let suite = "HuskyProfileRecoveryTests-\(label)-\(UUID().uuidString)"
+      let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+      defaults.removePersistentDomain(forName: suite)
+      defer { defaults.removePersistentDomain(forName: suite) }
+      defaults.set(original, forKey: Self.preferencesKey)
+
+      try HuskyProfileStore.recoverPreferences(defaults: defaults)
+
+      XCTAssertNil(defaults.object(forKey: Self.preferencesKey), label)
+      let backupKey = try XCTUnwrap(HuskyProfileStore.recoveryBackupKeys(defaults: defaults).first)
+      let backup = try XCTUnwrap(defaults.object(forKey: backupKey))
+      XCTAssertTrue((original as? NSObject)?.isEqual(backup) == true, label)
+    }
+  }
+
+  func testRecoveryWithoutPreferencesReportsMissingValue() throws {
     let suite = "HuskyProfileRecoveryTests-\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     defaults.removePersistentDomain(forName: suite)
     defer { defaults.removePersistentDomain(forName: suite) }
-    defaults.set("preserve this value", forKey: Self.preferencesKey)
 
     XCTAssertThrowsError(try HuskyProfileStore.recoverPreferences(defaults: defaults)) {
-      XCTAssertEqual($0 as? HuskyProfileStoreError, .invalidPreferences)
+      XCTAssertEqual($0 as? HuskyProfileStoreError, .noPreferencesToRecover)
     }
-    XCTAssertEqual(defaults.string(forKey: Self.preferencesKey), "preserve this value")
     XCTAssertTrue(HuskyProfileStore.recoveryBackupKeys(defaults: defaults).isEmpty)
   }
 

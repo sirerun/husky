@@ -296,14 +296,12 @@ public final class HuskyProfileStore {
   @ObservationIgnored private var state: PreferencesState
 
   /// Invoke only after the user confirms the recovery explanation in the UI.
-  /// Raw preference bytes are retained under a unique key; credentials are untouched.
+  /// The original property-list value is retained under a unique key; credentials are untouched.
   public static func recoverPreferences(defaults: UserDefaults = .standard) throws {
-    guard let rawValue = defaults.object(forKey: Self.preferencesKey) else {
+    guard let original = defaults.object(forKey: Self.preferencesKey) else {
       throw HuskyProfileStoreError.noPreferencesToRecover
     }
-    guard let original = rawValue as? Data else {
-      // Keep an unexpected property-list value in place. Recovery only moves
-      // byte-encoded preferences, whose contents can be verified losslessly.
+    guard PropertyListSerialization.propertyList(original, isValidFor: .binary) else {
       throw HuskyProfileStoreError.invalidPreferences
     }
 
@@ -312,7 +310,9 @@ public final class HuskyProfileStore {
       let candidate = Self.recoveryBackupKeyPrefix + UUID().uuidString
       guard defaults.object(forKey: candidate) == nil else { continue }
       defaults.set(original, forKey: candidate)
-      guard defaults.data(forKey: candidate) == original else {
+      guard let backup = defaults.object(forKey: candidate),
+        Self.propertyListValuesEqual(original, backup)
+      else {
         throw HuskyProfileStoreError.recoveryBackupVerificationFailed
       }
       backupKey = candidate
@@ -322,13 +322,26 @@ public final class HuskyProfileStore {
       throw HuskyProfileStoreError.recoveryBackupUnavailable
     }
 
-    guard defaults.data(forKey: Self.preferencesKey) == original else {
+    guard let current = defaults.object(forKey: Self.preferencesKey),
+      Self.propertyListValuesEqual(original, current)
+    else {
       throw HuskyProfileStoreError.recoveryPreferencesChanged
     }
     defaults.removeObject(forKey: Self.preferencesKey)
-    guard defaults.object(forKey: Self.preferencesKey) == nil else {
+    if defaults.object(forKey: Self.preferencesKey) != nil {
+      defaults.set(original, forKey: Self.preferencesKey)
+      guard let restored = defaults.object(forKey: Self.preferencesKey),
+        Self.propertyListValuesEqual(original, restored)
+      else {
+        throw HuskyProfileStoreError.recoveryRemovalFailed
+      }
       throw HuskyProfileStoreError.recoveryRemovalFailed
     }
+  }
+
+  private static func propertyListValuesEqual(_ lhs: Any, _ rhs: Any) -> Bool {
+    guard let lhs = lhs as? NSObject, let rhs = rhs as? NSObject else { return false }
+    return lhs.isEqual(rhs)
   }
 
   /// Lists backup key names only; preference and draft contents are never returned.
