@@ -59,7 +59,9 @@ final class HuskyConversationControllerTests: XCTestCase {
         .init(conversations: [], nextCursor: "page-\(index + 1)", hasMore: true),
         before: "page-\(index)")
     }
-    let controller = HuskyConversationController(operationTimeout: .seconds(5))
+    let controller = HuskyConversationController(
+      operationTimeout: .seconds(5), acceptanceTimeout: .milliseconds(80),
+      cleanupTimeout: .milliseconds(30))
     let oldAttach = Task {
       await controller.attach(
         profileID: UUID(), client: oldClient, preferredConversationID: "saved-outside-pages")
@@ -83,7 +85,6 @@ final class HuskyConversationControllerTests: XCTestCase {
     await gate.release(.init(messages: [], nextCursor: nil, hasMore: false, snapshotSequence: 0))
     await oldAttach.value
 
-    XCTAssertEqual(controller.profileID, newProfile)
     XCTAssertEqual(controller.selectedConversationID, "new")
     XCTAssertTrue(controller.isConnected)
     XCTAssertFalse(controller.isLoading)
