@@ -192,6 +192,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
           // The preferred ID was not accessible; choose from the loaded list.
         }
       }
+      guard self.generation == newGeneration else { return }
       selectedID = selectedID ?? self.conversations.first?.id
       guard let selectedID else {
         self.selectedConversationID = nil
@@ -539,7 +540,7 @@ public enum HuskySubmissionResult: Sendable, Equatable {
   private func activateConversation(
     _ id: String, generation: UInt64, preloadedHistory: HuskyHistoryPage? = nil
   ) async {
-    guard let client = self.client else { return }
+    guard self.generation == generation, let client = self.client else { return }
     let pageSize = self.historyPageSize
     self.selectedConversationID = id
     self.isLoading = true

@@ -48,6 +48,52 @@ final class HuskyConversationControllerTests: XCTestCase {
   }
 
   @MainActor
+  func testStalePreferredHistoryFailureCannotOverwriteNewProfile() async {
+    let gate = HistoryPageGate()
+    let oldClient = ControlledChatClient(
+      conversations: .init(
+        conversations: [Self.conversation("old")], nextCursor: "page-1", hasMore: true),
+      failingHistory: ("saved-outside-pages", gate))
+    for index in 1...24 {
+      await oldClient.setConversationPage(
+        .init(conversations: [], nextCursor: "page-\(index + 1)", hasMore: true),
+        before: "page-\(index)")
+    }
+    let controller = HuskyConversationController(operationTimeout: .seconds(5))
+    let oldAttach = Task {
+      await controller.attach(
+        profileID: UUID(), client: oldClient, preferredConversationID: "saved-outside-pages")
+    }
+    await self.waitUntil { await gate.hasPendingRequest() }
+
+    let session = ControlledSession()
+    let newProfile = UUID()
+    let newClient = ControlledChatClient(
+      conversations: .init(
+        conversations: [Self.conversation("new")], nextCursor: nil, hasMore: false),
+      sessions: [session])
+    await controller.attach(profileID: newProfile, client: newClient)
+    session.emit(
+      .init(
+        sequence: 0,
+        event: .sessionReady(
+          conversationID: "new", caughtUpThrough: 0, resumeToken: nil)))
+    await self.waitUntil { controller.isConnected }
+
+    await gate.release(.init(messages: [], nextCursor: nil, hasMore: false, snapshotSequence: 0))
+    await oldAttach.value
+
+    XCTAssertEqual(controller.profileID, newProfile)
+    XCTAssertEqual(controller.selectedConversationID, "new")
+    XCTAssertTrue(controller.isConnected)
+    XCTAssertFalse(controller.isLoading)
+    XCTAssertNil(controller.statusText)
+    let reads = await newClient.historyRequests()
+    XCTAssertEqual(reads, ["new"])
+    await controller.detach()
+  }
+
+  @MainActor
   func testPartialHistorySeedsFirstDeltaAndOrdinaryReconnectRevision() async {
     let firstSession = ControlledSession()
     let secondSession = ControlledSession()
@@ -687,17 +733,21 @@ private actor ControlledChatClient: HuskyChatClient {
   private var createFailuresRemaining = 0
   private var creates: [(requestID: String, title: String)] = []
   private let olderHistoryGate: HistoryPageGate?
+  private let failingHistory: (conversationID: String, gate: HistoryPageGate)?
+  private var historyReads: [String] = []
 
   init(
     conversations: HuskyConversationPage,
     histories: [String: [HuskyHistoryPage]] = [:],
     sessions: [ControlledSession] = [],
-    olderHistoryGate: HistoryPageGate? = nil
+    olderHistoryGate: HistoryPageGate? = nil,
+    failingHistory: (conversationID: String, gate: HistoryPageGate)? = nil
   ) {
     self.conversationPages = ["": conversations]
     self.historyPages = histories
     self.sessions = sessions
     self.olderHistoryGate = olderHistoryGate
+    self.failingHistory = failingHistory
   }
 
   func setConversationPage(_ page: HuskyConversationPage, before: String?) {
@@ -733,6 +783,11 @@ private actor ControlledChatClient: HuskyChatClient {
   func getHistory(conversationID: String, pageSize: UInt32, before cursor: String?) async throws
     -> HuskyHistoryPage
   {
+    self.historyReads.append(conversationID)
+    if let failingHistory, failingHistory.conversationID == conversationID {
+      _ = await failingHistory.gate.nextPage()
+      throw HuskyClientError.resynchronizationRequired
+    }
     if cursor == "older", let olderHistoryGate = self.olderHistoryGate {
       return await olderHistoryGate.nextPage()
     }
@@ -772,6 +827,8 @@ private actor ControlledChatClient: HuskyChatClient {
   )] {
     self.opened
   }
+
+  func historyRequests() -> [String] { self.historyReads }
 
   func createCount() -> Int { self.createdCount }
 
