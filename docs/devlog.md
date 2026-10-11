@@ -149,3 +149,37 @@ all final fixture corrections. Native acceptance remains blocked by the
 locked Mac session; no additional CUA attempts or unlock action is pending.
 PR #6 remains draft and unmerged. Main's planning PR #5 is landed at `ec984fb`;
 the primary checkout was fast-forwarded cleanly to that revision.
+
+
+## PR #6 review refresh — 2026-10-10
+
+Independent source review of `51dd38ddecc41f8a6d8b12b9fcac0d1a5fd73394`
+found a stale-attachment race: a delayed failure restoring a preferred conversation
+outside the bounded list scan could continue after a profile switch and alter the
+new connection state. The fix checks the generation after that fallback and at
+conversation activation. A deterministic regression holds the old lookup until a
+new attachment succeeds, then checks that its failure leaves the new selection,
+connection/loading state and history requests unchanged.
+
+At `63e45d96a1e455b63a0c80d3e2e44892f3d9e9e4`, all **89 tests pass**
+(66 core, 14 fixture/auth/recovery, 9 geometry), including the new regression.
+The test command was `swift test --jobs 2 --cache-path .build/package-cache`;
+the shared build lease was released. Strict Swift formatting and diff checks pass.
+Independent source re-review passes at that exact head with no remaining findings.
+
+Native accessibility actions on the isolated proof app verified saved-profile
+creation, fixture connection, conversation creation, message exchange, and
+restoration of the profile, selected conversation and Unicode draft after restart.
+Those checks began on `51dd38d`; after the fix and test run, the proof executable
+was refreshed from the build output, matching SHA-256
+`b4c0f0641713f63e0757fec6e84f8f96089b50dcc22e1897c809d72f4c822a51`,
+and message exchange passed again. This is a development proof bundle, not a
+signed release or published installation.
+
+Pointer-driven dragging repeatedly returned `noWindowsAvailable`, including after
+raising the window and refreshing the automation binding. Its saved frame did not
+move. Accessibility access is available; this result does not establish the
+current desktop lock state. Drag/restore, full focus/IME, display/Dock, visual
+background fidelity and accessibility acceptance remain incomplete. The owner
+chose to make an interactive desktop available rather than defer native acceptance.
+PR #6 remains draft and unmerged until the required native gate can be completed.
