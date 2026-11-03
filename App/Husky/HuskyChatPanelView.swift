@@ -280,18 +280,6 @@ struct HuskyChatPanelView: View {
             )
           }
         }
-        .overlay(alignment: .top) {
-          if !showsFullHistory {
-            LinearGradient(
-              colors: [Color(nsColor: .windowBackgroundColor).opacity(0.12), .clear],
-              startPoint: .top,
-              endPoint: .bottom
-            )
-            .frame(height: 110)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-          }
-        }
         .onPreferenceChange(HuskyTranscriptHeightKey.self) { contentBottom in
           isAtBottom = contentBottom <= viewport.size.height + 20
         }
