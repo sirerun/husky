@@ -25,6 +25,7 @@ struct HuskyChatPanelView: View {
   @State private var isAtBottom = true
   @State private var olderHistoryAnchor: String?
   @State private var historyLoadRevision = 0
+  @State private var historyScopeRevision = 0
 
   @ScaledMetric(relativeTo: .body) private var messageFontSize: CGFloat = 18
 
@@ -57,7 +58,10 @@ struct HuskyChatPanelView: View {
     HStack(spacing: 8) {
       Menu {
         ForEach(live.profiles.profiles) { profile in
-          Button(profile.name) { Task { await live.selectProfile(profile.id) } }
+          Button(profile.name) {
+            historyScopeRevision += 1
+            Task { await live.selectProfile(profile.id) }
+          }
         }
         Divider()
         Button("Connection settings…") {
@@ -73,6 +77,7 @@ struct HuskyChatPanelView: View {
       Menu {
         ForEach(live.conversation.conversations) { conversation in
           Button(conversation.title.isEmpty ? "Untitled" : conversation.title) {
+            historyScopeRevision += 1
             Task { await live.selectConversation(conversation.id) }
           }
         }
@@ -95,6 +100,7 @@ struct HuskyChatPanelView: View {
       }
       .disabled(live.profiles.selectedProfileID == nil)
       Button {
+        historyScopeRevision += 1
         Task { await live.selectProfile(live.profiles.selectedProfileID) }
       } label: {
         Image(systemName: "arrow.clockwise")
@@ -123,8 +129,15 @@ struct HuskyChatPanelView: View {
         Button("Load older messages") {
           isAtBottom = false
           let anchor = model.messages.first?.id
+          let scopeRevision = historyScopeRevision
+          let profileID = live.profiles.selectedProfileID
+          let conversationID = live.conversation.selectedConversationID
           Task {
             await live.conversation.loadOlderMessages()
+            guard scopeRevision == historyScopeRevision,
+              profileID == live.profiles.selectedProfileID,
+              conversationID == live.conversation.selectedConversationID
+            else { return }
             olderHistoryAnchor = anchor
             historyLoadRevision += 1
           }
@@ -168,6 +181,7 @@ struct HuskyChatPanelView: View {
       Button("Create") {
         let title = newConversationTitle
         newConversationTitle = ""
+        historyScopeRevision += 1
         Task { await model.liveClient?.createConversation(title: title) }
       }
       Button("Cancel", role: .cancel) {}
