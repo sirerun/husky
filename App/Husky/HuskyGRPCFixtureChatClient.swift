@@ -3,8 +3,9 @@ import GRPCCore
 import GRPCNIOTransportHTTP2
 import HuskyCore
 import HuskyProtocol
+import Observation
 
-@MainActor
+@MainActor @Observable
 final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
   private enum FixtureClientError: LocalizedError {
     case notConnected
@@ -17,6 +18,7 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
     }
   }
 
+  private(set) var isConnected = false
   private let port: Int
   private var messages: [HuskyPanelMessage] = []
   private var statusText: String? = "Connecting to local gRPC fixture…"
@@ -56,6 +58,7 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
   }
 
   func shutdown() async {
+    self.isConnected = false
     if let session = self.session {
       await session.end()
     }
@@ -151,14 +154,17 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
             }
           }
         }
+        self.isConnected = false
         self.session = nil
         guard !Task.isCancelled else { return }
         self.publishStatus("Fixture stream closed; reconnecting from canonical history…")
       } catch is CancellationError {
+        self.isConnected = false
         self.session = nil
         self.publishStatus(nil)
         return
       } catch {
+        self.isConnected = false
         self.session = nil
         guard !Task.isCancelled else { return }
         self.publishStatus(
@@ -176,6 +182,7 @@ final class HuskyGRPCFixtureChatClient: HuskyChatPanelClient {
   private func apply(_ event: HuskyChatEvent) {
     switch event {
     case .sessionReady:
+      self.isConnected = true
       self.publishStatus("Connected to deterministic local gRPC fixture")
     case .messageAccepted(_, let userMessage, _):
       self.upsert(Self.panelMessage(userMessage))

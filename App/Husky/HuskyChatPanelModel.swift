@@ -18,6 +18,24 @@ final class HuskyChatPanelModel {
     }
     return fixtureMessages
   }
+  var isConnected: Bool {
+    guard recoveryClient == nil else { return false }
+    if let liveClient { return liveClient.conversation.isConnected }
+    if let fixture = client as? HuskyGRPCFixtureChatClient { return fixture.isConnected }
+    return true
+  }
+
+  var canSubmit: Bool {
+    guard !isSending, isConnected else { return false }
+    if let liveClient {
+      let conversation = liveClient.conversation
+      return conversation.isConnected && conversation.selectedConversationID != nil
+        && (conversation.activeRequestID == nil
+          || conversation.activeRequestID == liveClient.draft.pendingRequestID)
+    }
+    return true
+  }
+
   private(set) var isSending = false
   private var operationStatus: String?
   var statusText: String? {
@@ -53,7 +71,7 @@ final class HuskyChatPanelModel {
 
   func submit(_ text: String) async -> Bool {
     let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedText.isEmpty, !isSending else { return false }
+    guard !trimmedText.isEmpty, canSubmit else { return false }
 
     isSending = true
     operationStatus = nil

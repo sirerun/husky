@@ -76,6 +76,8 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
     menu.addItem(
       NSMenuItem(title: "Show or Hide Husky", action: #selector(togglePanel), keyEquivalent: ""))
     menu.addItem(
+      NSMenuItem(title: "Chat Controls…", action: #selector(showChatControls), keyEquivalent: ""))
+    menu.addItem(
       NSMenuItem(
         title: "Reset Window Position", action: #selector(resetPosition), keyEquivalent: ""))
     menu.addItem(.separator())
@@ -89,6 +91,11 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
 
   @objc private func togglePanel() {
     panelController?.toggle()
+  }
+
+  @objc private func showChatControls() {
+    panelController?.show()
+    NotificationCenter.default.post(name: .huskyShowChatControls, object: nil)
   }
 
   @objc private func resetPosition() {
@@ -184,4 +191,8 @@ private final class HuskyDemoChatClient: HuskyChatPanelClient {
     messages.append(HuskyPanelMessage(id: UUID().uuidString, role: .user, text: text))
     continuation?.yield(messages)
   }
+}
+
+extension Notification.Name {
+  static let huskyShowChatControls = Notification.Name("HuskyShowChatControls")
 }
