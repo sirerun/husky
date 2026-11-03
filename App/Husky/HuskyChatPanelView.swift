@@ -24,6 +24,7 @@ struct HuskyChatPanelView: View {
   @State private var showsFullHistory = false
   @State private var isAtBottom = true
   @State private var olderHistoryAnchor: String?
+  @State private var historyLoadRevision = 0
 
   @ScaledMetric(relativeTo: .body) private var messageFontSize: CGFloat = 18
 
@@ -125,6 +126,7 @@ struct HuskyChatPanelView: View {
           Task {
             await live.conversation.loadOlderMessages()
             olderHistoryAnchor = anchor
+            historyLoadRevision += 1
           }
         }
         .disabled(live.conversation.isLoadingHistory)
@@ -222,8 +224,8 @@ struct HuskyChatPanelView: View {
             )
           }
         }
-        .onChange(of: olderHistoryAnchor) { _, anchor in
-          if let anchor { scrollProxy.scrollTo(anchor, anchor: .top) }
+        .onChange(of: historyLoadRevision) { _, _ in
+          if let anchor = olderHistoryAnchor { scrollProxy.scrollTo(anchor, anchor: .top) }
         }
         .onPreferenceChange(HuskyTranscriptHeightKey.self) { contentBottom in
           isAtBottom = contentBottom <= viewport.size.height + 20
