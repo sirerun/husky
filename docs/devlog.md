@@ -87,3 +87,16 @@ The user confirmed the supplied glass-chat-2 dist as the floating-chat reference
 - Sizing correction reviewed at `c536ce5`; both legacy frame variants now match the fresh-install target and custom frames remain unchanged.
 - Integrated `swift test --package-path .` passed on `74c9cf3` after correcting the two stale mapper-validator calls. Strict formatting, `swift package dump-package`, and `git diff --check` passed. The build emitted two pre-existing unnecessary-`try` warnings in `HuskyLimitTests.swift`.
 - Native fixture window screenshot measured 896×1088 pixels, corresponding to the 448×544-point target at 2×, and the existing conversation text remained readable. Several CUA drag attempts did not change the saved frame, so native movement and restore are still unverified.
+
+## App icon and app-switcher identity
+
+The owner selected the navy husky-face icon. Added its source artwork and a
+local development packaging tool that generates macOS ICNS sizes and sets
+both bundle name fields to `Husky`. Packaging preserves the source bundle ID,
+executable and resource bundles, refuses existing outputs and signed inputs.
+
+Local verification: packaged the existing native preview without changing its
+executable SHA-256; `plutil -lint` passed. Relaunched the resulting bundle and
+native accessibility reported `App: Husky` and a `Husky` application menu.
+App-switcher icon rendering was not captured. No source rebuild, independent
+review, signed release or automatic-update qualification is claimed.

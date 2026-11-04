@@ -20,6 +20,8 @@ def main():
         raise SystemExit("Output must be a new path named Husky.app")
     if source in destination.parents:
         raise SystemExit("Output must be outside the source bundle")
+    if (source / "Contents/_CodeSignature").exists():
+        raise SystemExit("Source must be an unsigned development bundle")
     info_path = source / "Contents/Info.plist"
     with info_path.open("rb") as stream:
         info = plistlib.load(stream)
