@@ -218,3 +218,27 @@ and ended the test meeting afterward. Left the requested Zoom capture mode selec
 Sequoia 15.6.1, receiving-participant capture, incoming updates, dragging and
 auxiliary-window exclusion remain unverified. No invisibility guarantee,
 installed production rebuild, release or merge is claimed.
+
+## PR #6 salvage checkpoint — 2026-11-04
+
+Reconciled clean historical worktrees and current remote PRs. Older foundation,
+planning, icon and exclusion work is already landed; client worker checkpoints
+are patch-equivalent to work contained in the existing PR #6 lifecycle. Retained
+all originals and continued in an isolated checkout without rewriting PR history.
+Integrated current main, preserving the selected icon and best-effort exclusion.
+
+Supplemental native checks of the earlier source-identical client UI observed
+minimal bubbles/capsule appearance, native dead-key composition, local fixture
+submission/reply, context-menu controls, and full-history fade toggling. Bubble
+margin drags produced no moved-frame diagnostic event. Added an explicit native
+material-background drag handler while keeping text and composer views separate;
+its final native drag/text-selection acceptance is still pending.
+
+The integrated pre-drag-fix source `f095746` completed a native app build. Its
+initial host-pressure admission measurement was incomplete and is retained as
+qualified evidence. The final source `87a479b` passed formatting and diff checks,
+but fresh build admission was refused because of nonnormal memory pressure and
+sustained swap churn. No retry, final build or final tests followed that refusal.
+The prior 89-test receipt does not qualify these source changes. PR #6 remains
+draft pending final build/tests, native acceptance and independent final review;
+no merge, release, installation or automatic-update qualification is claimed.
