@@ -45,3 +45,9 @@ Automatic updates run in the background and install when safe, preserving local 
 ## Evidence boundaries
 
 The conformance fixture proves Husky's generic API behavior, not compatibility with any untested backend or hosted AI product. Local developer builds do not prove signed distribution. Signed artifacts do not prove local installation. A reachable feed does not prove automatic installation. Native/reference fidelity, published artifact launch, and actual successor update each require their own evidence.
+
+## Capture exclusion
+
+The floating chat panel requests best-effort capture exclusion through the legacy
+window-sharing flag (ADR 0002). Visibility in Zoom depends on its capture mode
+and OS version. This is not guaranteed protection against screen capture.

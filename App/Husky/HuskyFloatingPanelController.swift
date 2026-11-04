@@ -32,6 +32,9 @@ final class HuskyFloatingPanelController {
       backing: .buffered,
       defer: false
     )
+    // Best effort for capture tools that honor the legacy window-sharing flag.
+    // ScreenCaptureKit may still capture this panel; this is not a privacy guarantee.
+    panel.sharingType = .none
     panel.isFloatingPanel = true
     panel.level = .floating
     panel.backgroundColor = .clear
