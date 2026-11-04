@@ -33,7 +33,7 @@ struct HuskyMaterialSurface: NSViewRepresentable {
   let cornerRadius: CGFloat
 
   func makeNSView(context: Context) -> NSVisualEffectView {
-    let view = NSVisualEffectView()
+    let view = HuskyDraggableMaterialView()
     configure(view)
     return view
   }
@@ -50,5 +50,19 @@ struct HuskyMaterialSurface: NSViewRepresentable {
     view.layer?.cornerRadius = cornerRadius
     view.layer?.masksToBounds = true
     view.isEmphasized = false
+  }
+}
+
+/// Only material background receives these events; text and composer controls
+/// retain their own hit testing and selection behavior above the background.
+private final class HuskyDraggableMaterialView: NSVisualEffectView {
+  override var mouseDownCanMoveWindow: Bool { true }
+
+  override func mouseDown(with event: NSEvent) {
+    guard let window else {
+      super.mouseDown(with: event)
+      return
+    }
+    window.performDrag(with: event)
   }
 }
