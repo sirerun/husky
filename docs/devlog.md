@@ -183,3 +183,38 @@ current desktop lock state. Drag/restore, full focus/IME, display/Dock, visual
 background fidelity and accessibility acceptance remain incomplete. The owner
 chose to make an interactive desktop available rather than defer native acceptance.
 PR #6 remains draft and unmerged until the required native gate can be completed.
+
+## App icon and app-switcher identity
+
+The owner selected the navy husky-face icon. Added its source artwork and a
+local development packaging tool that generates macOS ICNS sizes and sets
+both bundle name fields to `Husky`. Packaging preserves the source bundle ID,
+executable and resource bundles, refuses existing outputs and signed inputs.
+
+Local verification: packaged the existing native preview without changing its
+executable SHA-256; `plutil -lint` passed. Relaunched the resulting bundle and
+native accessibility reported `App: Husky` and a `Husky` application menu.
+App-switcher icon rendering was not captured. No source rebuild, independent
+review, signed release or automatic-update qualification is claimed.
+
+## Best-effort capture exclusion — 2026-11-03
+
+Added `panel.sharingType = .none` before presentation (ADR 0002). A native
+Swift 6 UI harness compiled the actual six panel/view/model/material/geometry/
+client sources with a synthetic chat client. Runtime assertions passed for
+`.none`, local window visibility, and persistence through hide/show. Native
+accessibility confirmed synthetic conversation content and typing during sharing.
+This is focused UI-harness evidence, not a full application/dependency rebuild.
+
+Zoom 7.1.9 (88375), macOS 26.6.2: selected Advanced capture with window filtering
+and shared the entire desktop in a solo meeting with microphone/camera off.
+The harness panel was omitted from the selectable application-window list.
+In an A/B comparison, changing only the panel flag to `.readOnly` made its blue
+composer control visible in Zoom's outgoing share preview; restoring `.none`
+removed it. The preview was small, so this is limited outgoing-preview evidence,
+not receiving-participant or recorded-video acceptance. Stopped desktop sharing
+and ended the test meeting afterward. Left the requested Zoom capture mode selected.
+
+Sequoia 15.6.1, receiving-participant capture, incoming updates, dragging and
+auxiliary-window exclusion remain unverified. No invisibility guarantee,
+installed production rebuild, release or merge is claimed.
