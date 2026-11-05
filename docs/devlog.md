@@ -242,3 +242,17 @@ sustained swap churn. No retry, final build or final tests followed that refusal
 The prior 89-test receipt does not qualify these source changes. PR #6 remains
 draft pending final build/tests, native acceptance and independent final review;
 no merge, release, installation or automatic-update qualification is claimed.
+
+
+## Scroll-contained bubble dragging correction — 2026-11-04
+
+Native hit testing showed that the scroll view's clip view received bubble-margin
+mouse-down events before the material background, so the previous material-view
+drag handler did not move the panel. Replaced it with a SwiftUI WindowDragGesture
+on the trailing horizontal-padding strip of each bubble. The gesture can activate
+an inactive window; selectable message text and composer controls retain their
+existing gestures. Removed the ineffective material-background subclass.
+
+This correction requires a fresh native build, affected checks, and observed
+pointer movement/text selection before acceptance. Earlier source/build/native
+receipts do not qualify the changed drag behavior.

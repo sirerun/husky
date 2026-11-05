@@ -372,6 +372,17 @@ private struct HuskyMessageBubble: View {
                 lineWidth: 1)
           }
         }
+        .overlay(alignment: .trailing) {
+          // Keep dragging on the padded edge, outside selectable message text.
+          Rectangle()
+            .fill(.clear)
+            .frame(width: HuskyPanelLayout.messageHorizontalPadding)
+            .contentShape(Rectangle())
+            .gesture(WindowDragGesture())
+            .allowsWindowActivationEvents()
+            .help("Drag this edge to move Husky")
+            .accessibilityHidden(true)
+        }
         .clipShape(
           RoundedRectangle(cornerRadius: HuskyPanelLayout.messageCornerRadius, style: .continuous)
         )
