@@ -256,3 +256,31 @@ existing gestures. Removed the ineffective material-background subclass.
 This correction requires a fresh native build, affected checks, and observed
 pointer movement/text selection before acceptance. Earlier source/build/native
 receipts do not qualify the changed drag behavior.
+
+
+## Drag-fix qualification checkpoint — 2026-11-04
+
+The explicit bubble-padding drag gesture is source revision `2fabb91735b400b5bd20829a3244360f7d461294`.
+Fresh native x86_64 and arm64-targeted application builds pass with Swift 6.2;
+the native build host runs macOS 15.6.1. The arm64 app is a cross-build, not a
+claim of native arm64 runtime acceptance. Development app bundles retain the
+approved Husky icon/name and use new isolated qualification identifiers.
+
+All 89 XCTest cases pass with zero failures in a `swift test --skip-build` replay.
+This replay uses the previously passing native x86_64 XCTest binary: every test,
+component dependency, fixture and package-manifest source is byte-identical to
+`9f4172d1586ae5f425ae461ac0696747dbd3f9ec`. It is unchanged-component cached-binary
+evidence, not a clean full rebuild or a test of the new UI gesture. The earlier
+full test-build attempt reached its deadline rebuilding unrelated protoc tooling;
+it did not produce a test or source failure. Private receipts retain the source
+and binary hashes, commands, resource admission and owned lease-release results.
+
+Independent source-only review at `2fabb91` reported no blocking findings. Fresh
+pointer movement, text selection and relaunch verification on the new drag-fix
+app remain open: the native acceptance Mac's OS session was locked when the
+artifact became available. No unlock or capture bypass was attempted as a way
+around that session boundary. The earlier UI and window-hit-testing observations
+remain scoped to their recorded revisions and test probes.
+
+PR #6 remains draft and unmerged. T2.7 and T2.8 are not closed; review/merge/landed,
+signed-release, installation and automatic-update acceptance are not claimed.
