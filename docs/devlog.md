@@ -88,6 +88,102 @@ The user confirmed the supplied glass-chat-2 dist as the floating-chat reference
 - Integrated `swift test --package-path .` passed on `74c9cf3` after correcting the two stale mapper-validator calls. Strict formatting, `swift package dump-package`, and `git diff --check` passed. The build emitted two pre-existing unnecessary-`try` warnings in `HuskyLimitTests.swift`.
 - Native fixture window screenshot measured 896×1088 pixels, corresponding to the 448×544-point target at 2×, and the existing conversation text remained readable. Several CUA drag attempts did not change the saved frame, so native movement and restore are still unverified.
 
+## E2 implementation continuation — 2026-10-06
+
+PR #5 rebase-merged the independently reviewed delivery plan at `ec984fb`.
+Reviewed candidate `cd5f226` had identical landed content. The E2 source work
+adds profile-specific authorization to all RPCs and explicitly cancels local
+session teardown so an unresponsive peer cannot block shutdown indefinitely.
+Normal startup is being wired to saved connections and accepted-message draft
+semantics; static and original fixture demonstrations remain explicit.
+Three isolated Luna workers own profile storage, conversation orchestration and
+native window lifecycle. Native Mac exemption applies; new full builds/tests
+remain held while host load exceeds 10. No new runtime or release claim is made.
+
+## E2 verification checkpoint — 2026-10-06
+
+At `2491d65`, a fresh native `swift test --jobs 2 --cache-path .build/package-cache`
+build and all 77 tests passed (58 core, 10 fixture/auth, 9 geometry) under the
+shared build lease. The initial run at `0532080` had two failures; endpoint
+validation and the paginated canonical-history expectation were corrected,
+alongside independently identified replay/create/history/reconnect races.
+Both leases were released. Formatting and diff checks passed.
+
+The isolated native proof app launched and wrote a 448×544 autosaved frame,
+but CUA returned `cgWindowNotFound`. A read-only session check confirmed the
+Mac screen was locked. No unlock was attempted. Saved preferences are not
+visible-window, drag, focus, IME, display/Dock or accessibility acceptance.
+Owned proof-app and loopback-fixture processes were stopped; no user app or
+shared process was stopped. Native acceptance remains blocked on an unlocked
+interactive session.
+
+A subsequent additive recovery extension is under verification: authoritative
+partial text/revision snapshots and seed propagation through both transport and
+controller validators. It prevents guessing state when attaching during an
+in-progress message. These changes need a fresh integrated test result and
+independent review; the 77-test result does not cover them. PR #6 remains draft.
+
+## Complete E2 source test gate — 2026-10-06
+
+The test-target/fixture build and `swift test --jobs 2 --cache-path .build/package-cache` passed at
+`e3b723297b9711cc70380277b14a9f479ef34270`: 65 core + 14 fixture/auth/recovery +
+9 geometry = 88 tests. The shared lease was acquired only below load 10 and
+released immediately afterward. The test log explicitly records the fixture
+product; it does not establish a fresh compilation of the app target in that run.
+A separate `swift build --product Husky --jobs 2 --cache-path .build/package-cache`
+passed at `2326fecd4352e552b02d2ba39b4e59d162fedff8` under a new lease, which was
+also released. App/core/package source is unchanged from the tested `e3b7232`;
+this explicit application build accepts up-to-date cached outputs and is not a
+forced clean rebuild. The additive partial snapshot path is covered over in-process real gRPC,
+including seeded replay, missing baseline, revision/cumulative byte rejection,
+canonical completion, sequenced asynchronous failure and cursor expiry.
+
+Independent review drove replay-ack, create-retry, pagination/resync, reconnect
+state, corrupted-preferences recovery and asynchronous fixture-failure fixes.
+Create retry ID/title is retained within a live controller, but not across
+application restart; adapter documentation states that limitation. Typed-message
+pending ID/payload remains durable per profile/conversation.
+
+Independent Luna source review PASS at `e3b7232` against `ec984fb`, including
+all final fixture corrections. Native acceptance remains blocked by the
+locked Mac session; no additional CUA attempts or unlock action is pending.
+PR #6 remains draft and unmerged. Main's planning PR #5 is landed at `ec984fb`;
+the primary checkout was fast-forwarded cleanly to that revision.
+
+
+## PR #6 review refresh — 2026-10-10
+
+Independent source review of `51dd38ddecc41f8a6d8b12b9fcac0d1a5fd73394`
+found a stale-attachment race: a delayed failure restoring a preferred conversation
+outside the bounded list scan could continue after a profile switch and alter the
+new connection state. The fix checks the generation after that fallback and at
+conversation activation. A deterministic regression holds the old lookup until a
+new attachment succeeds, then checks that its failure leaves the new selection,
+connection/loading state and history requests unchanged.
+
+At `63e45d96a1e455b63a0c80d3e2e44892f3d9e9e4`, all **89 tests pass**
+(66 core, 14 fixture/auth/recovery, 9 geometry), including the new regression.
+The test command was `swift test --jobs 2 --cache-path .build/package-cache`;
+the shared build lease was released. Strict Swift formatting and diff checks pass.
+Independent source re-review passes at that exact head with no remaining findings.
+
+Native accessibility actions on the isolated proof app verified saved-profile
+creation, fixture connection, conversation creation, message exchange, and
+restoration of the profile, selected conversation and Unicode draft after restart.
+Those checks began on `51dd38d`; after the fix and test run, the proof executable
+was refreshed from the build output, matching SHA-256
+`b4c0f0641713f63e0757fec6e84f8f96089b50dcc22e1897c809d72f4c822a51`,
+and message exchange passed again. This is a development proof bundle, not a
+signed release or published installation.
+
+Pointer-driven dragging repeatedly returned `noWindowsAvailable`, including after
+raising the window and refreshing the automation binding. Its saved frame did not
+move. Accessibility access is available; this result does not establish the
+current desktop lock state. Drag/restore, full focus/IME, display/Dock, visual
+background fidelity and accessibility acceptance remain incomplete. The owner
+chose to make an interactive desktop available rather than defer native acceptance.
+PR #6 remains draft and unmerged until the required native gate can be completed.
+
 ## App icon and app-switcher identity
 
 The owner selected the navy husky-face icon. Added its source artwork and a
@@ -122,3 +218,69 @@ and ended the test meeting afterward. Left the requested Zoom capture mode selec
 Sequoia 15.6.1, receiving-participant capture, incoming updates, dragging and
 auxiliary-window exclusion remain unverified. No invisibility guarantee,
 installed production rebuild, release or merge is claimed.
+
+## PR #6 salvage checkpoint — 2026-11-04
+
+Reconciled clean historical worktrees and current remote PRs. Older foundation,
+planning, icon and exclusion work is already landed; client worker checkpoints
+are patch-equivalent to work contained in the existing PR #6 lifecycle. Retained
+all originals and continued in an isolated checkout without rewriting PR history.
+Integrated current main, preserving the selected icon and best-effort exclusion.
+
+Supplemental native checks of the earlier source-identical client UI observed
+minimal bubbles/capsule appearance, native dead-key composition, local fixture
+submission/reply, context-menu controls, and full-history fade toggling. Bubble
+margin drags produced no moved-frame diagnostic event. Added an explicit native
+material-background drag handler while keeping text and composer views separate;
+its final native drag/text-selection acceptance is still pending.
+
+The integrated pre-drag-fix source `f095746` completed a native app build. Its
+initial host-pressure admission measurement was incomplete and is retained as
+qualified evidence. The final source `87a479b` passed formatting and diff checks,
+but fresh build admission was refused because of nonnormal memory pressure and
+sustained swap churn. No retry, final build or final tests followed that refusal.
+The prior 89-test receipt does not qualify these source changes. PR #6 remains
+draft pending final build/tests, native acceptance and independent final review;
+no merge, release, installation or automatic-update qualification is claimed.
+
+
+## Scroll-contained bubble dragging correction — 2026-11-04
+
+Native hit testing showed that the scroll view's clip view received bubble-margin
+mouse-down events before the material background, so the previous material-view
+drag handler did not move the panel. Replaced it with a SwiftUI WindowDragGesture
+on the trailing horizontal-padding strip of each bubble. The gesture can activate
+an inactive window; selectable message text and composer controls retain their
+existing gestures. Removed the ineffective material-background subclass.
+
+This correction requires a fresh native build, affected checks, and observed
+pointer movement/text selection before acceptance. Earlier source/build/native
+receipts do not qualify the changed drag behavior.
+
+
+## Drag-fix qualification checkpoint — 2026-11-04
+
+The explicit bubble-padding drag gesture is source revision `2fabb91735b400b5bd20829a3244360f7d461294`.
+Fresh native x86_64 and arm64-targeted application builds pass with Swift 6.2;
+the native build host runs macOS 15.6.1. The arm64 app is a cross-build, not a
+claim of native arm64 runtime acceptance. Development app bundles retain the
+approved Husky icon/name and use new isolated qualification identifiers.
+
+All 89 XCTest cases pass with zero failures in a `swift test --skip-build` replay.
+This replay uses the previously passing native x86_64 XCTest binary: every test,
+component dependency, fixture and package-manifest source is byte-identical to
+`9f4172d1586ae5f425ae461ac0696747dbd3f9ec`. It is unchanged-component cached-binary
+evidence, not a clean full rebuild or a test of the new UI gesture. The earlier
+full test-build attempt reached its deadline rebuilding unrelated protoc tooling;
+it did not produce a test or source failure. Private receipts retain the source
+and binary hashes, commands, resource admission and owned lease-release results.
+
+Independent source-only review at `2fabb91` reported no blocking findings. Fresh
+pointer movement, text selection and relaunch verification on the new drag-fix
+app remain open: the native acceptance Mac's OS session was locked when the
+artifact became available. No unlock or capture bypass was attempted as a way
+around that session boundary. The earlier UI and window-hit-testing observations
+remain scoped to their recorded revisions and test probes.
+
+PR #6 remains draft and unmerged. T2.7 and T2.8 are not closed; review/merge/landed,
+signed-release, installation and automatic-update acceptance are not claimed.

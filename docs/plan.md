@@ -2,6 +2,8 @@
 
 Current delivery (2026-10-06): PR #4 is merged at `c956db9e68af03ca2b34283948463f721d0c55df`. Foundation source, independent review and source landing are complete. Native acceptance remains open, particularly drag/restore, live display changes, focus/IME and accessibility. Final foundation verification combined the last integrated build with current UI typechecking and 40 unchanged XCTest cases; hosted CI did not run because of account billing. The owner invoked ship again to finish the remaining client and distribution work. Husky is a native Mac project and uses the explicit Mac exemption to workload relocation, retaining load/lease limits.
 
+Client continuation: [PR #6](https://github.com/sirerun/husky/pull/6) contains the complete client source candidate; 88 native automated tests pass at `e3b7232`. It remains unmerged because native acceptance requires an unlocked interactive Mac session. Signed release/install/update tasks remain downstream.
+
 ## 1. Context
 
 Husky is a generic native macOS chat client that floats over desktop apps. It provides a movable stack of glass message bubbles, a composer, scrollable backend-owned history, multiple conversations, and saved backend connection profiles. The selected backend receives typed input and streams text and status events back through a common gRPC API. Audio capture and transcription services operate independently and have no integration dependency on Husky.
@@ -54,7 +56,7 @@ Acceptance is stated under each task without requiring optional execution toolin
 
 ### E1 — native fidelity proof and API foundation (fidelity: executable) → docs/plans/E1.md (10/11)
 
-### E2 — complete generic chat client (fidelity: executable) → docs/plans/E2.md (0/15)
+### E2 — complete generic chat client (fidelity: executable) → docs/plans/E2.md (11/15)
 
 ### E3 — signed release and Sparkle updates (fidelity: outline) → docs/plans/E3.md (0/1)
 

@@ -37,6 +37,24 @@ public protocol HuskyChatClient: Sendable {
     afterSequence: UInt64,
     resumeToken: String?
   ) async throws -> any HuskyConversationSession
+
+  func openConversation(
+    conversationID: String, afterSequence: UInt64, resumeToken: String?,
+    partialMessages: [HuskyPartialMessageSnapshot]
+  ) async throws -> any HuskyConversationSession
+}
+
+extension HuskyChatClient {
+  public func openConversation(
+    conversationID: String, afterSequence: UInt64, resumeToken: String?,
+    partialMessages: [HuskyPartialMessageSnapshot]
+  ) async throws -> any HuskyConversationSession {
+    guard partialMessages.isEmpty else {
+      throw HuskyPartialRecoveryError.unsupportedAdapter
+    }
+    return try await openConversation(
+      conversationID: conversationID, afterSequence: afterSequence, resumeToken: resumeToken)
+  }
 }
 
 public struct HuskySequencedEvent: Sendable, Equatable {

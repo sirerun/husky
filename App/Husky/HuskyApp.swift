@@ -1,4 +1,5 @@
 import AppKit
+import HuskyCore
 import SwiftUI
 
 @main
@@ -28,7 +29,13 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
     } else if demo {
       client = HuskyDemoChatClient()
     } else {
-      client = HuskyUnconfiguredChatClient()
+      do {
+        let live = HuskyLiveChatClient(profiles: try HuskyProfileStore())
+        client = live
+        Task { await live.selectProfile(live.profiles.selectedProfileID) }
+      } catch {
+        client = HuskyUnconfiguredChatClient()
+      }
     }
     chatClient = client
     panelController = HuskyFloatingPanelController(
@@ -37,6 +44,12 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
     )
     panelController?.show()
     configureStatusItem()
+  }
+
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool
+  {
+    panelController?.show()
+    return true
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -62,6 +75,11 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
     let menu = NSMenu()
     menu.addItem(
       NSMenuItem(title: "Show or Hide Husky", action: #selector(togglePanel), keyEquivalent: ""))
+    menu.addItem(
+      NSMenuItem(title: "Chat Controls…", action: #selector(showChatControls), keyEquivalent: ""))
+    menu.addItem(
+      NSMenuItem(
+        title: "Reset Window Position", action: #selector(resetPosition), keyEquivalent: ""))
     menu.addItem(.separator())
     menu.addItem(NSMenuItem(title: "Quit Husky", action: #selector(quit), keyEquivalent: "q"))
     for menuItem in menu.items {
@@ -73,6 +91,15 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
 
   @objc private func togglePanel() {
     panelController?.toggle()
+  }
+
+  @objc private func showChatControls() {
+    panelController?.show()
+    NotificationCenter.default.post(name: .huskyShowChatControls, object: nil)
+  }
+
+  @objc private func resetPosition() {
+    panelController?.resetPosition()
   }
 
   @objc private func quit() {
@@ -92,7 +119,10 @@ private final class HuskyAppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @MainActor
-private final class HuskyUnconfiguredChatClient: HuskyChatPanelClient {
+private final class HuskyUnconfiguredChatClient: HuskyRecoverableSettingsClient {
+  func recoverSettings() throws {
+    try HuskyProfileStore.recoverPreferences()
+  }
   private enum ClientError: LocalizedError {
     case noBackend
 
@@ -110,7 +140,9 @@ private final class HuskyUnconfiguredChatClient: HuskyChatPanelClient {
 
   func statusUpdates() -> AsyncStream<String?> {
     AsyncStream { continuation in
-      continuation.yield(nil)
+      continuation.yield(
+        "Saved connection settings could not be opened. Check local storage and Keychain access, then restart Husky."
+      )
       continuation.finish()
     }
   }
@@ -159,4 +191,8 @@ private final class HuskyDemoChatClient: HuskyChatPanelClient {
     messages.append(HuskyPanelMessage(id: UUID().uuidString, role: .user, text: text))
     continuation?.yield(messages)
   }
+}
+
+extension Notification.Name {
+  static let huskyShowChatControls = Notification.Name("HuskyShowChatControls")
 }

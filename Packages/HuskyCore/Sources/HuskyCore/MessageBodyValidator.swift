@@ -7,6 +7,34 @@ enum HuskyMessageBodyValidator {
     var requestID: String?
   }
 
+  static func seed(
+    _ snapshots: [HuskyPartialMessageSnapshot], conversationID: String,
+    afterSequence: UInt64, maximumBytes: UInt32
+  ) throws -> [String: PartialMessage] {
+    guard snapshots.count <= 64 else {
+      throw HuskyClientError.malformedResponse("too many partial message snapshots")
+    }
+    var result: [String: PartialMessage] = [:]
+    var totalBytes = 0
+    for snapshot in snapshots {
+      let message = snapshot.message
+      try HuskyGRPCMapper.validateIdentifier(message.id)
+      try HuskyGRPCMapper.validateIdentifier(message.conversationID)
+      if let requestID = message.requestID { try HuskyGRPCMapper.validateIdentifier(requestID) }
+      try validateConversation(message, expected: conversationID)
+      try validate(message.text, maximumBytes: maximumBytes)
+      totalBytes += message.text.utf8.count
+      guard totalBytes <= 2 * 1024 * 1024, message.sequence > 0,
+        message.sequence <= afterSequence, message.role != .user, result[message.id] == nil
+      else {
+        throw HuskyClientError.malformedResponse("invalid partial message snapshot")
+      }
+      result[message.id] = PartialMessage(
+        revision: snapshot.revision, text: message.text, requestID: message.requestID)
+    }
+    return result
+  }
+
   static func validate(_ text: String, maximumBytes: UInt32) throws {
     let byteCount = text.utf8.count
     guard byteCount <= Int(maximumBytes) else {
@@ -44,7 +72,7 @@ enum HuskyMessageBodyValidator {
 
     case .textDelta(let requestID, let messageID, let revision, let append, let replace):
       guard var partial = partialMessages[messageID] else {
-        throw HuskyClientError.malformedResponse("text delta arrived before message start")
+        throw HuskyPartialRecoveryError.missingBaseline
       }
       guard requestID == partial.requestID else {
         throw HuskyClientError.malformedResponse(
